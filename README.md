@@ -2,7 +2,7 @@
 
 **Make room. Keep control.** TidyCircuit is a private Windows file review app. The public 0.1.1 download is read-only; newer local smart-review and recoverable cleanup work on `main` is not in that download yet.
 
-[Download TidyCircuit for Windows](https://github.com/wlplease/CleanMeScarlett/releases/latest/download/TidyCircuit-0.1.1-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/CleanMeScarlett) · [Privacy](PRIVACY.md) · [Disclaimer](DISCLAIMER.md) · [Security](SECURITY.md) · [Install/uninstall](INSTALL.md) · [Report a bug](https://github.com/wlplease/CleanMeScarlett/issues/new)
+[Download TidyCircuit for Windows](https://github.com/wlplease/tidycircuit/releases/latest/download/TidyCircuit-0.1.1-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Disclaimer](DISCLAIMER.md) · [Security](SECURITY.md) · [Install/uninstall](INSTALL.md) · [Report a bug](https://github.com/wlplease/tidycircuit/issues/new)
 
 ## Early access 0.1.1
 

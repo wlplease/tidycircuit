@@ -30,4 +30,4 @@ The desktop operation log includes full paths, byte counts, times, and outcomes 
 
 ## Contact and report a problem
 
-For product support, open a [GitHub issue](https://github.com/wlplease/CleanMeScarlett/issues/new). Please do not attach private file lists or system reports. Include the app version, Windows version, steps to reproduce, and the exact error text. For a security vulnerability, use the private reporting link in [SECURITY.md](SECURITY.md), not a public issue.
+For product support, open a [GitHub issue](https://github.com/wlplease/tidycircuit/issues/new). Please do not attach private file lists or system reports. Include the app version, Windows version, steps to reproduce, and the exact error text. For a security vulnerability, use the private reporting link in [SECURITY.md](SECURITY.md), not a public issue.
