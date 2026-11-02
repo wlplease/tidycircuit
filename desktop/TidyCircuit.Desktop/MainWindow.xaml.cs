@@ -559,6 +559,7 @@ public partial class MainWindow : Window
         StatusText.Text = $"Checking {marked.Count:N0} selected files…";
         ScanProgress.Visibility = Visibility.Visible; ScanProgress.IsIndeterminate = true;
         ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
+        MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = false;
         List<(FileRow Row, string? Reason)> eligibility;
         try { eligibility = await Task.Run(() => marked.Select(row => (Row: row, Reason: RecycleBlockReason(row, _selectedRoot))).ToList()); }
         catch (Exception ex)
@@ -571,6 +572,7 @@ public partial class MainWindow : Window
         {
             ScanProgress.IsIndeterminate = false; ScanProgress.Visibility = Visibility.Collapsed;
             ScanButton.IsEnabled = FolderButton.IsEnabled = true;
+            MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = true;
             UpdateMarkedSummary();
         }
         var eligible = eligibility.Where(item => item.Reason is null).Select(item => item.Row).ToList();
@@ -588,6 +590,7 @@ public partial class MainWindow : Window
         var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) { StatusText.Text = "Cleanup canceled · no files changed"; return; }
         ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
+        MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = false;
         PauseScanButton.Visibility = Visibility.Collapsed;
         CancelScanButton.Content = "Cancel cleanup"; CancelScanButton.IsEnabled = true; CancelScanButton.Visibility = Visibility.Visible;
         ScanProgress.Visibility = Visibility.Visible; ScanProgress.IsIndeterminate = false; ScanProgress.Maximum = eligible.Count; ScanProgress.Value = 0;
@@ -613,12 +616,18 @@ public partial class MainWindow : Window
             else if (result.Cancelled)
                 StatusText.Text = $"Cleanup canceled · moved {result.Moved.Count:N0} file(s) · remaining files were not changed";
         }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Cleanup stopped · check the Recycle Bin for files already moved";
+            MessageBox.Show($"Cleanup stopped unexpectedly. {ex.Message}\n\nCheck the Recycle Bin for files already moved.", "Cleanup stopped", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
         finally
         {
             _cleanupCancellation?.Dispose(); _cleanupCancellation = null;
             CancelScanButton.Content = "Cancel"; CancelScanButton.IsEnabled = false; CancelScanButton.Visibility = Visibility.Collapsed;
             ScanProgress.IsIndeterminate = false; ScanProgress.Visibility = Visibility.Collapsed; ScanProgress.Maximum = 100; ScanProgress.Value = 0;
             ScanButton.IsEnabled = FolderButton.IsEnabled = true;
+            MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = true;
             UpdateMarkedSummary();
         }
     }

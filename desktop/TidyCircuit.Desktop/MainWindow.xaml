@@ -208,9 +208,9 @@
                                 <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox x:Name="SearchBox" Height="36" Padding="10,8" BorderBrush="#D6E6E5" ToolTip="Search file names, folders, extensions, or any part of a path" Text="Search names, folders, extensions…" Foreground="#829498" GotKeyboardFocus="SearchBox_GotKeyboardFocus" LostKeyboardFocus="SearchBox_LostKeyboardFocus" TextChanged="SearchBox_TextChanged"/>
                                     <ComboBox x:Name="SortBox" Grid.Column="1" Width="146" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="SortBox_SelectionChanged"><ComboBoxItem Content="Largest first"/><ComboBoxItem Content="Name A–Z"/><ComboBoxItem Content="Oldest first"/></ComboBox>
-                                    <Button Grid.Column="2" Content="Select all" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
-                                    <Button Grid.Column="3" Content="Select visible" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="MarkVisible_Click"/>
-                                    <Button Grid.Column="4" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
+                                    <Button x:Name="SelectAllButton" Grid.Column="2" Content="Select all" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
+                                    <Button x:Name="SelectVisibleButton" Grid.Column="3" Content="Select visible" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="MarkVisible_Click"/>
+                                    <Button x:Name="ClearSelectionButton" Grid.Column="4" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
                                 </Grid>
                                 <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Select all covers the scan. Select visible replaces selection with the shown results." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
