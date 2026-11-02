@@ -20,7 +20,7 @@ Cleanup is manual. Before a Recycle Bin action, the app rechecks eligibility and
 
 ## Release candidate status
 
-This is an **unsigned 0.2.0 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. This release candidate has been exercised on the project PC with disposable files. A separate clean-PC installation test is still pending; do not treat it as a production release.
+This is an **unsigned 0.2.0 RC.2 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. This release candidate has been exercised on the project PC with disposable files. A separate clean-PC installation test is still pending; do not treat it as a production release.
 
 ## Install and uninstall
 
