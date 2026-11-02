@@ -2,9 +2,9 @@
 
 **Make room. Keep control.** TidyCircuit is a Windows desktop file review app with a private, read-only scan.
 
-[Download TidyCircuit for Windows](https://github.com/wlplease/CleanMeScarlett/releases/latest/download/TidyCircuit-0.1.0-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/CleanMeScarlett)
+[Download TidyCircuit for Windows](https://github.com/wlplease/CleanMeScarlett/releases/latest/download/TidyCircuit-0.1.1-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/CleanMeScarlett)
 
-## Early access 0.1.0
+## Early access 0.1.1
 
 - Choose a folder and see file count, total size, full paths, and modified dates.
 - Search and sort files; mark items and export a TSV review list.
@@ -15,7 +15,7 @@ The app only reads the selected folder. It does not move or delete files, clear 
 
 ## Install
 
-1. Download and unzip `TidyCircuit-0.1.0-win-x64.zip`.
+1. Download and unzip `TidyCircuit-0.1.1-win-x64.zip`.
 2. Run `TidyCircuit.exe`.
 3. Choose a folder. Scanning begins immediately and shows status in the app.
 
