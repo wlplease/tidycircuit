@@ -22,7 +22,11 @@ public partial class MainWindow : Window
     private Func<FileRow, bool> _smartFilter = _ => true;
     private CancellationTokenSource? _scanCancellation;
     private CancellationTokenSource? _filterCancellation;
+    private readonly ManualResetEventSlim _scanPauseGate = new(true);
+    private readonly ManualResetEventSlim _filterPauseGate = new(true);
     private bool _isUpdatingMarks;
+    private bool _scanPaused;
+    private bool _filterPaused;
     private bool _limitLargestResults;
     private long _filterRequest;
     private string _assistantSummary = "Suggestions use file size, dates, names, and local content hashes. They never decide a file is safe to remove.";
@@ -34,6 +38,12 @@ public partial class MainWindow : Window
         FilesGrid.Sorting += (_, e) => { e.Handled = true; SortRows(); };
         _searchDebounce.Tick += async (_, _) => { _searchDebounce.Stop(); await ApplyCurrentFiltersAsync(); };
         MainTabs.SelectionChanged += (_, _) => SetActiveNavigation();
+        Closing += (_, _) =>
+        {
+            _searchDebounce.Stop();
+            _scanCancellation?.Cancel(); _scanPauseGate.Set();
+            _filterCancellation?.Cancel(); _filterPauseGate.Set();
+        };
         SetActiveNavigation();
     }
     private async void ChooseFolder_Click(object sender, RoutedEventArgs e)
@@ -52,7 +62,9 @@ public partial class MainWindow : Window
     private async Task ScanFolderAsync(string root)
     {
         ScanButton.IsEnabled = FolderButton.IsEnabled = false;
-        CancelScanButton.IsEnabled = true; CancelScanButton.Visibility = Visibility.Visible; ScanProgress.Visibility = Visibility.Visible;
+        CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = true;
+        CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Visible;
+        PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
         _scanCancellation = new CancellationTokenSource();
         var token = _scanCancellation.Token;
         _filterCancellation?.Cancel(); _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
@@ -62,16 +74,19 @@ public partial class MainWindow : Window
         StatusText.Text = "Scanning selected folder · nothing is changed"; ScanProgress.IsIndeterminate = true;
         try
         {
-            var inventoryProgress = new Progress<int>(count => ProgressText.Text = $"Reading file {count:N0}");
-            var (files, inventoryErrors) = await Task.Run(() => ReadFiles(root, token, inventoryProgress));
+            var inventoryProgress = new Progress<ScanInventoryProgress>(update =>
+            {
+                if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Reading {update.Files:N0} files · {update.Folders:N0} folders · {update.CurrentFolder}";
+            });
+            var (files, inventoryErrors) = await Task.Run(() => ReadFiles(root, token, inventoryProgress, _scanPauseGate));
             token.ThrowIfCancellationRequested();
             System.ComponentModel.PropertyChangedEventHandler markedChanged = FileRow_PropertyChanged;
             foreach (var row in files) row.PropertyChanged += markedChanged;
             _rows.AddRange(files.OrderByDescending(f => f.Size));
             FileCountText.Text = files.Count.ToString("N0"); FolderSizeText.Text = Format(files.Sum(f => f.Size));
             ProgressText.Text = "Comparing matching files";
-            var hashProgress = new Progress<int>(count => ProgressText.Text = $"Hashing candidate {count:N0}");
-            var (dupes, hashErrors) = await Task.Run(() => FindDuplicates(files, token, hashProgress));
+            var hashProgress = new Progress<int>(count => { if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Checking duplicate content · {count:N0} files…"; });
+            var (dupes, hashErrors) = await Task.Run(() => FindDuplicates(files, token, hashProgress, _scanPauseGate));
             DuplicatesText.Text = dupes.ToString("N0");
             var errors = inventoryErrors + hashErrors;
             StatusText.Text = errors == 0
@@ -94,47 +109,61 @@ public partial class MainWindow : Window
         finally
         {
             ProgressText.Text = ""; ScanProgress.IsIndeterminate = false; ScanButton.IsEnabled = FolderButton.IsEnabled = true;
-            CancelScanButton.IsEnabled = false; CancelScanButton.Visibility = Visibility.Collapsed; ScanProgress.Visibility = Visibility.Collapsed;
+            CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = false;
+            CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Collapsed;
+            _scanPaused = false; _scanPauseGate.Set();
             _scanCancellation?.Dispose(); _scanCancellation = null;
         }
     }
-    private void CancelScan_Click(object sender, RoutedEventArgs e) { _scanCancellation?.Cancel(); ProgressText.Text = "Stopping after current file…"; }
-    private static (List<FileRow> Files, int Errors) ReadFiles(string root, CancellationToken token, IProgress<int> progress)
+    private void PauseScan_Click(object sender, RoutedEventArgs e)
     {
-        var files = new List<FileRow>(); var errors = 0;
+        if (_scanCancellation is null) return;
+        _scanPaused = !_scanPaused;
+        if (_scanPaused) { _scanPauseGate.Reset(); PauseScanButton.Content = "Resume"; ProgressText.Text = "Scan paused · resume to continue"; }
+        else { _scanPauseGate.Set(); PauseScanButton.Content = "Pause"; ProgressText.Text = "Resuming scan…"; }
+    }
+    private void CancelScan_Click(object sender, RoutedEventArgs e) { _scanCancellation?.Cancel(); _scanPauseGate.Set(); ProgressText.Text = "Stopping scan…"; }
+    private static (List<FileRow> Files, int Errors) ReadFiles(string root, CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate)
+    {
+        var files = new List<FileRow>(); var errors = 0; var folders = 0; var currentFolder = root;
         var options = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint };
         var pending = new Stack<string>(); pending.Push(root);
         while (pending.Count > 0)
         {
             token.ThrowIfCancellationRequested();
+            pauseGate.Wait(token);
             var dir = pending.Pop();
-            try { foreach (var child in Directory.EnumerateDirectories(dir, "*", options)) pending.Push(child); }
+            currentFolder = Path.GetFileName(dir);
+            if (string.IsNullOrWhiteSpace(currentFolder)) currentFolder = dir;
+            progress.Report(new(files.Count, ++folders, currentFolder));
+            try { foreach (var child in Directory.EnumerateDirectories(dir, "*", options)) { token.ThrowIfCancellationRequested(); pauseGate.Wait(token); pending.Push(child); } }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors++; }
             try
             {
                 foreach (var path in Directory.EnumerateFiles(dir, "*", options))
                 {
                     token.ThrowIfCancellationRequested();
+                    pauseGate.Wait(token);
                     try { var info = new FileInfo(path); files.Add(new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = Path.GetRelativePath(root, info.FullName), Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension }); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
-                    if (files.Count % 2000 == 0) progress.Report(files.Count);
+                    if (files.Count % 500 == 0) progress.Report(new(files.Count, folders, currentFolder));
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
         }
+        if (!token.IsCancellationRequested) progress.Report(new(files.Count, folders, currentFolder));
         return (files, errors);
     }
-    private static (int Duplicates, int Errors) FindDuplicates(List<FileRow> files, CancellationToken token = default, IProgress<int>? progress = null)
+    private static (int Duplicates, int Errors) FindDuplicates(List<FileRow> files, CancellationToken token = default, IProgress<int>? progress = null, ManualResetEventSlim? pauseGate = null)
     {
-        var count = 0; var errors = 0;
+        var count = 0; var errors = 0; var candidate = 0;
         foreach (var sizeGroup in files.Where(f => f.Size >= 0 && f.Size <= 268_435_456).GroupBy(f => f.Size).Where(g => g.Count() > 1))
         {
             var hashes = new Dictionary<string, List<FileRow>>();
-            var candidate = 0;
             foreach (var row in sizeGroup)
             {
                 token.ThrowIfCancellationRequested();
-                try { using var stream = File.OpenRead(row.FullPath); var hash = Convert.ToHexString(SHA256.HashData(stream)); if (!hashes.TryGetValue(hash, out var matches)) hashes[hash] = matches = new(); matches.Add(row); }
+                try { var hash = HashFile(row.FullPath, token, pauseGate); if (!hashes.TryGetValue(hash, out var matches)) hashes[hash] = matches = new(); matches.Add(row); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException) { errors++; }
                 candidate++;
                 if (candidate % 128 == 0) progress?.Report(candidate);
@@ -145,7 +174,20 @@ public partial class MainWindow : Window
                 count += hashGroup.Count() - 1;
             }
         }
+        progress?.Report(candidate);
         return (count, errors);
+    }
+    private static string HashFile(string path, CancellationToken token, ManualResetEventSlim? pauseGate)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024, FileOptions.SequentialScan);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[128 * 1024];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            token.ThrowIfCancellationRequested(); pauseGate?.Wait(token); hash.AppendData(buffer, 0, read);
+        }
+        return Convert.ToHexString(hash.GetHashAndReset());
     }
     private static string Format(long bytes) { string[] units = ["B", "KB", "MB", "GB", "TB"]; double value = bytes; var unit = 0; while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; } return $"{value:0.#} {units[unit]}"; }
     private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) { _searchDebounce.Stop(); _searchDebounce.Start(); }
@@ -162,9 +204,10 @@ public partial class MainWindow : Window
     private async Task<List<FileRow>?> ApplyCurrentFiltersAsync()
     {
         if (FilesGrid is null || SearchBox is null) return null;
-        _filterCancellation?.Cancel();
+        _filterCancellation?.Cancel(); _filterPauseGate.Set();
         var cancellation = new CancellationTokenSource();
         _filterCancellation = cancellation;
+        _filterPaused = false;
         var request = ++_filterRequest;
         var token = cancellation.Token;
         var term = SearchBox.Text.Trim();
@@ -174,15 +217,27 @@ public partial class MainWindow : Window
         var sortIndex = SortBox.SelectedIndex;
         var snapshot = _rows.ToArray();
         if (ReviewCountText is not null) ReviewCountText.Text = "Searching…";
+        if (SearchProgressRow is not null) SearchProgressRow.Visibility = Visibility.Visible;
+        if (SearchPauseButton is not null) { SearchPauseButton.Content = "Pause"; SearchPauseButton.IsEnabled = true; }
+        if (SearchProgressBar is not null) { SearchProgressBar.Value = 0; }
+        if (SearchProgressText is not null) SearchProgressText.Text = $"Searching 0 / {snapshot.Length:N0}";
+        IProgress<(int Processed, int Total, int Matches)> searchProgress = new Progress<(int Processed, int Total, int Matches)>(progress =>
+        {
+            if (request != _filterRequest || token.IsCancellationRequested || _filterPaused) return;
+            if (SearchProgressBar is not null) SearchProgressBar.Value = progress.Total == 0 ? 100 : progress.Processed * 100d / progress.Total;
+            if (SearchProgressText is not null) SearchProgressText.Text = $"Searching {progress.Processed:N0} / {progress.Total:N0} · {progress.Matches:N0} matches";
+        });
         try
         {
             var matches = await Task.Run(() =>
             {
                 var found = new List<FileRow>();
-                foreach (var row in snapshot)
+                for (var index = 0; index < snapshot.Length; index++)
                 {
-                    token.ThrowIfCancellationRequested();
+                    token.ThrowIfCancellationRequested(); _filterPauseGate.Wait(token);
+                    var row = snapshot[index];
                     if (smartFilter(row) && (term.Length == 0 || row.FullPath.Contains(term, StringComparison.OrdinalIgnoreCase))) found.Add(row);
+                    if ((index + 1) % 500 == 0 || index + 1 == snapshot.Length) searchProgress.Report((index + 1, snapshot.Length, found.Count));
                 }
                 IEnumerable<FileRow> ordered = sortIndex switch
                 {
@@ -194,6 +249,7 @@ public partial class MainWindow : Window
             }, token);
             if (token.IsCancellationRequested || request != _filterRequest) return null;
             _visibleRows.ReplaceAll(matches);
+            if (SearchProgressBar is not null) SearchProgressBar.Value = 100;
             if (AssistantStatus is not null)
                 AssistantStatus.Text = _assistantSummary + (term.Length > 0 ? $" · Search narrows results to {matches.Count:N0}" : "");
             UpdateMarkedSummary();
@@ -205,15 +261,31 @@ public partial class MainWindow : Window
             if (request == _filterRequest)
             {
                 if (AssistantStatus is not null) AssistantStatus.Text = "Search could not finish. Try another term or scan a smaller folder.";
-                if (ReviewCountText is not null) ReviewCountText.Text = "Search paused · previous results kept";
+                if (ReviewCountText is not null) ReviewCountText.Text = "Search failed · previous results kept";
             }
             return null;
         }
         finally
         {
             cancellation.Dispose();
-            if (request == _filterRequest && ReferenceEquals(_filterCancellation, cancellation)) _filterCancellation = null;
+            if (request == _filterRequest && ReferenceEquals(_filterCancellation, cancellation))
+            {
+                _filterCancellation = null; _filterPaused = false; _filterPauseGate.Set();
+                if (SearchPauseButton is not null) SearchPauseButton.IsEnabled = false;
+                if (SearchProgressRow is not null) SearchProgressRow.Visibility = Visibility.Collapsed;
+            }
         }
+    }
+    private void PauseSearch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_filterCancellation is null) return;
+        _filterPaused = !_filterPaused;
+        if (_filterPaused)
+        {
+            _filterPauseGate.Reset(); SearchPauseButton.Content = "Resume";
+            SearchProgressText.Text = "Paused · resume to continue at the same point";
+        }
+        else { _filterPauseGate.Set(); SearchPauseButton.Content = "Pause"; SearchProgressText.Text = "Resuming search…"; }
     }
     private void AskBox_GotKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
     {
@@ -539,6 +611,7 @@ public partial class MainWindow : Window
         catch (Exception ex) { MessageBox.Show($"Windows Security could not be opened. Find it in the Start menu. {ex.Message}", "Could not open Windows Security", MessageBoxButton.OK, MessageBoxImage.Information); }
     }
 }
+public readonly record struct ScanInventoryProgress(int Files, int Folders, string CurrentFolder);
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
     public void ReplaceAll(IEnumerable<T> items)

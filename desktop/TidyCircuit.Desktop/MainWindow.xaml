@@ -84,11 +84,19 @@
                 </StackPanel>
             </Grid>
             <Border Grid.Row="1" Background="#E7F5F2" CornerRadius="10" Padding="10,8" Margin="0,0,0,12">
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBlock x:Name="StatusText" Text="Ready · Choose a folder to begin" TextTrimming="CharacterEllipsis" Foreground="#245D62" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <ProgressBar x:Name="ScanProgress" Grid.Column="1" Width="120" Height="5" IsIndeterminate="False" Visibility="Collapsed" Foreground="#087D86" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    <TextBlock x:Name="ProgressText" Grid.Column="2" Foreground="#638287" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    <Button x:Name="CancelScanButton" Grid.Column="3" Content="Cancel scan" IsEnabled="False" Visibility="Collapsed" Background="Transparent" Foreground="#9B4D3B" Padding="8,4" Margin="8,0,0,0" Click="CancelScan_Click"/>
+                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock x:Name="StatusText" Text="Ready · Choose a folder to begin" TextTrimming="CharacterEllipsis" Foreground="#245D62" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ProgressBar x:Name="ScanProgress" Grid.Column="1" Width="120" Height="5" IsIndeterminate="False" Visibility="Collapsed" Foreground="#087D86" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        <TextBlock x:Name="ProgressText" Grid.Column="2" Foreground="#638287" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        <Button x:Name="PauseScanButton" Grid.Column="3" Content="Pause" IsEnabled="False" Visibility="Collapsed" Background="Transparent" Foreground="#087D86" Padding="8,4" Margin="8,0,0,0" Click="PauseScan_Click"/>
+                        <Button x:Name="CancelScanButton" Grid.Column="4" Content="Cancel" IsEnabled="False" Visibility="Collapsed" Background="Transparent" Foreground="#9B4D3B" Padding="8,4" Margin="4,0,0,0" Click="CancelScan_Click"/>
+                    </Grid>
+                    <Grid x:Name="SearchProgressRow" Grid.Row="1" Visibility="Collapsed" Margin="1,7,1,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <ProgressBar x:Name="SearchProgressBar" Height="4" Minimum="0" Maximum="100" Foreground="#087D86" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="SearchProgressText" Grid.Column="1" Text="Searching…" Foreground="#638287" FontSize="10" VerticalAlignment="Center" Margin="9,0,0,0"/>
+                        <Button x:Name="SearchPauseButton" Grid.Column="2" Content="Pause" Background="Transparent" Foreground="#087D86" Padding="8,3" Margin="5,0,0,0" Click="PauseSearch_Click"/>
+                    </Grid>
                 </Grid>
             </Border>
 
