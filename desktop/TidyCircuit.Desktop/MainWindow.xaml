@@ -200,7 +200,7 @@
                     <Grid Margin="0,4,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel><TextBlock Text="FILE REVIEW" Foreground="#143E50" FontSize="18" FontWeight="Bold"/>
-                                <TextBlock Text="Search the list, select exactly what you want, then choose an action." Foreground="#688086" FontSize="11" Margin="0,3,0,0"/>
+                                <TextBlock Text="Click a column title to sort. Review the full path and file details before cleanup." Foreground="#688086" FontSize="11" Margin="0,3,0,0"/>
                             </StackPanel>
                             <TextBlock x:Name="ReviewCountText" Grid.Column="1" Text="0 shown · 0 selected" Foreground="#087D86" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </Grid>
@@ -221,14 +221,18 @@
                             </Grid>
                         </Border>
                         <Border Grid.Row="2" Background="White" CornerRadius="13" Padding="9">
-                            <DataGrid x:Name="FilesGrid" AutoGenerateColumns="False" IsReadOnly="False" CanUserAddRows="False" AlternationCount="2">
+                            <DataGrid x:Name="FilesGrid" AutoGenerateColumns="False" IsReadOnly="False" CanUserAddRows="False" AlternationCount="2" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True">
                                 <DataGrid.Columns>
                                     <DataGridCheckBoxColumn Header="SELECT" Binding="{Binding Marked, UpdateSourceTrigger=PropertyChanged}" Width="70"/>
-                                    <DataGridTextColumn Header="FILE NAME" Binding="{Binding Name}" Width="2*" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="FOLDER / PATH" Binding="{Binding RelativePath}" Width="3*" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="SIZE" Binding="{Binding SizeDisplay}" Width="100" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="MATCH" Binding="{Binding DuplicateDisplay}" Width="115" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="MODIFIED" Binding="{Binding ModifiedDisplay}" Width="150" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="FILE NAME" SortMemberPath="Name" Binding="{Binding Name}" Width="2*" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="FULL PATH" SortMemberPath="FullPath" Binding="{Binding FullPath}" Width="3*" IsReadOnly="True">
+                                        <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding FullPath}"/></Style></DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="TYPE" SortMemberPath="Type" Binding="{Binding TypeDisplay}" Width="80" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="SIZE" SortMemberPath="Size" Binding="{Binding SizeDisplay}" Width="95" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="AGE" SortMemberPath="AgeDays" Binding="{Binding AgeDisplay}" Width="75" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="MATCH" SortMemberPath="Duplicate" Binding="{Binding DuplicateDisplay}" Width="105" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="MODIFIED" SortMemberPath="Modified" Binding="{Binding ModifiedDisplay}" Width="135" IsReadOnly="True"/>
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Border>

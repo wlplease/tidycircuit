@@ -31,7 +31,10 @@ public partial class MainWindow : Window
     private bool _scanPaused;
     private bool _filterPaused;
     private bool _automaticScan;
+    private bool _syncingSort;
     private bool _limitLargestResults;
+    private string _sortProperty = nameof(FileRow.Size);
+    private bool _sortDescending = true;
     private long _filterRequest;
     private string _assistantSummary = "Suggestions use file size, dates, names, and local content hashes. They never decide a file is safe to remove.";
     private const string AskHint = "Try: largest videos, duplicates, old files, or PDFs";
@@ -39,7 +42,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent(); FilesGrid.ItemsSource = _visibleRows;
-        FilesGrid.Sorting += (_, e) => { e.Handled = true; SortRows(); };
+        FilesGrid.Sorting += FilesGrid_Sorting;
+        UpdateSortIndicators();
         _searchDebounce.Tick += async (_, _) => { _searchDebounce.Stop(); await ApplyCurrentFiltersAsync(); };
         MainTabs.SelectionChanged += (_, _) => SetActiveNavigation();
         Closing += (_, _) =>
@@ -343,7 +347,42 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(SearchBox.Text)) { SearchBox.Text = SearchHint; SearchBox.Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#829498")!; }
     }
-    private void SortBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) => SortRows();
+    private void SortBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_syncingSort) return;
+        switch (SortBox.SelectedIndex)
+        {
+            case 0: _sortProperty = nameof(FileRow.Size); _sortDescending = true; break;
+            case 1: _sortProperty = nameof(FileRow.Name); _sortDescending = false; break;
+            case 2: _sortProperty = nameof(FileRow.Modified); _sortDescending = false; break;
+            default: return;
+        }
+        UpdateSortIndicators(); SortRows();
+    }
+    private void FilesGrid_Sorting(object? sender, System.Windows.Controls.DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+        var property = e.Column.SortMemberPath;
+        if (string.IsNullOrWhiteSpace(property)) return;
+        if (property == _sortProperty) _sortDescending = !_sortDescending;
+        else { _sortProperty = property; _sortDescending = false; }
+        _syncingSort = true;
+        SortBox.SelectedIndex = property switch
+        {
+            nameof(FileRow.Size) when _sortDescending => 0,
+            nameof(FileRow.Name) when !_sortDescending => 1,
+            nameof(FileRow.Modified) when !_sortDescending => 2,
+            _ => -1
+        };
+        _syncingSort = false;
+        UpdateSortIndicators(); SortRows();
+    }
+    private void UpdateSortIndicators()
+    {
+        if (FilesGrid is null) return;
+        foreach (var column in FilesGrid.Columns)
+            column.SortDirection = column.SortMemberPath == _sortProperty ? (_sortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending) : null;
+    }
     private void SortRows() => _ = ApplyCurrentFiltersAsync();
     private async Task<List<FileRow>?> ApplyCurrentFiltersAsync()
     {
@@ -358,7 +397,8 @@ public partial class MainWindow : Window
         if (term == SearchHint) term = "";
         var smartFilter = _smartFilter;
         var largestOnly = _limitLargestResults;
-        var sortIndex = SortBox.SelectedIndex;
+        var sortProperty = _sortProperty;
+        var sortDescending = _sortDescending;
         var snapshot = _rows.ToArray();
         if (ReviewCountText is not null) ReviewCountText.Text = "Searching…";
         if (SearchProgressRow is not null) SearchProgressRow.Visibility = Visibility.Visible;
@@ -383,11 +423,15 @@ public partial class MainWindow : Window
                     if (smartFilter(row) && (term.Length == 0 || row.FullPath.Contains(term, StringComparison.OrdinalIgnoreCase))) found.Add(row);
                     if ((index + 1) % 500 == 0 || index + 1 == snapshot.Length) searchProgress.Report((index + 1, snapshot.Length, found.Count));
                 }
-                IEnumerable<FileRow> ordered = sortIndex switch
+                IEnumerable<FileRow> ordered = sortProperty switch
                 {
-                    1 => found.OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase),
-                    2 => found.OrderBy(row => row.Modified),
-                    _ => found.OrderByDescending(row => row.Size)
+                    nameof(FileRow.Name) => sortDescending ? found.OrderByDescending(row => row.Name, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Name, StringComparer.OrdinalIgnoreCase),
+                    nameof(FileRow.FullPath) => sortDescending ? found.OrderByDescending(row => row.FullPath, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase),
+                    nameof(FileRow.Type) => sortDescending ? found.OrderByDescending(row => row.Type, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Type, StringComparer.OrdinalIgnoreCase),
+                    nameof(FileRow.AgeDays) => sortDescending ? found.OrderByDescending(row => row.AgeDays) : found.OrderBy(row => row.AgeDays),
+                    nameof(FileRow.Duplicate) => sortDescending ? found.OrderByDescending(row => row.Duplicate).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Duplicate).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase),
+                    nameof(FileRow.Modified) => sortDescending ? found.OrderByDescending(row => row.Modified) : found.OrderBy(row => row.Modified),
+                    _ => sortDescending ? found.OrderByDescending(row => row.Size).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Size).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
                 };
                 return largestOnly ? ordered.Take(25).ToList() : ordered.ToList();
             }, token);
@@ -898,6 +942,22 @@ public sealed class FileRow : INotifyPropertyChanged
     public string Name { get; set; } = ""; public string FullPath { get; set; } = ""; public string RelativePath { get; set; } = ""; public string Type { get; set; } = ""; public string ScanRoot { get; set; } = ""; public long Size { get; set; } public DateTime Modified { get; set; }
     public bool Duplicate { get => _duplicate; set { if (_duplicate == value) return; _duplicate = value; PropertyChanged?.Invoke(this, new(nameof(Duplicate))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); } }
     public string DuplicateDisplay => Duplicate ? "Same content" : "—";
+    public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "No extension" : Type.TrimStart('.').ToUpperInvariant();
+    public int AgeDays => (DateTime.Today - Modified.Date).Days;
+    public string AgeDisplay
+    {
+        get
+        {
+            var days = AgeDays;
+            if (days < 0) return "Future";
+            if (days == 0) return "Today";
+            if (days < 14) return $"{days}d";
+            if (days < 60) return $"{days / 7}w";
+            if (days < 365) return $"{days / 30}mo";
+            var years = days / 365; var months = days % 365 / 30;
+            return months == 0 ? $"{years}y" : $"{years}y {months}mo";
+        }
+    }
     public string SizeDisplay => Size < 0 ? "—" : Format(Size); public string ModifiedDisplay => Modified.ToString("yyyy-MM-dd HH:mm");
     public bool Marked { get => _marked; set { _marked = value; PropertyChanged?.Invoke(this, new(nameof(Marked))); } }
     public event PropertyChangedEventHandler? PropertyChanged;
