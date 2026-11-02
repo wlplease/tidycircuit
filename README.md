@@ -11,7 +11,7 @@
 - Verify duplicates using SHA-256 after matching file size. Files above 256 MB are skipped.
 - Run on Windows 10 or 11, x64. The ZIP contains a self-contained executable; no .NET install is required.
 
-The 0.1.1 download only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. The unreleased `main` source adds a local rule-based finder and a manually confirmed Recycle Bin action with protected paths and a local operation log. It does not include a language model or upload scan data. Use Windows Security for malware scans. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
+The 0.1.1 download only reads the selected folder. It does not move or delete files, clear caches, or detect malware. The unreleased `main` source adds a local rule-based finder, background search for large inventories, and a manually confirmed Recycle Bin action with protected paths and a local operation log. It can review recognized temporary cache files from Chrome, Edge, Brave, and Firefox; it does not clear Windows or arbitrary app caches. Browser cookies, history, passwords, and bookmarks are excluded. The app does not include a language model or upload scan data. Use Windows Security for malware scans. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
 
 ## Install
 

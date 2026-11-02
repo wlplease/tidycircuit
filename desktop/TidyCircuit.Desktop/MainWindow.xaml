@@ -86,9 +86,9 @@
             <Border Grid.Row="1" Background="#E7F5F2" CornerRadius="10" Padding="10,8" Margin="0,0,0,12">
                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <TextBlock x:Name="StatusText" Text="Ready · Choose a folder to begin" TextTrimming="CharacterEllipsis" Foreground="#245D62" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <ProgressBar x:Name="ScanProgress" Grid.Column="1" Width="120" Height="5" IsIndeterminate="False" Foreground="#087D86" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    <ProgressBar x:Name="ScanProgress" Grid.Column="1" Width="120" Height="5" IsIndeterminate="False" Visibility="Collapsed" Foreground="#087D86" VerticalAlignment="Center" Margin="12,0,0,0"/>
                     <TextBlock x:Name="ProgressText" Grid.Column="2" Foreground="#638287" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    <Button x:Name="CancelScanButton" Grid.Column="3" Content="Cancel scan" IsEnabled="False" Background="Transparent" Foreground="#9B4D3B" Padding="8,4" Margin="8,0,0,0" Click="CancelScan_Click"/>
+                    <Button x:Name="CancelScanButton" Grid.Column="3" Content="Cancel scan" IsEnabled="False" Visibility="Collapsed" Background="Transparent" Foreground="#9B4D3B" Padding="8,4" Margin="8,0,0,0" Click="CancelScan_Click"/>
                 </Grid>
             </Border>
 
@@ -168,6 +168,7 @@
                                     <Button Content="Older than 6 months" Tag="old files" Padding="10,7" Margin="0,0,7,0" Background="White" Foreground="#087D86" Click="Suggestion_Click"/>
                                     <Button Content="Photos" Tag="photos" Padding="10,7" Margin="0,0,7,0" Background="White" Foreground="#087D86" Click="Suggestion_Click"/>
                                     <Button Content="Videos" Tag="videos" Padding="10,7" Background="White" Foreground="#087D86" Click="Suggestion_Click"/>
+                                    <Button Content="Browser cache" Tag="browser cache" Padding="10,7" Margin="7,0,0,0" Background="White" Foreground="#087D86" Click="Suggestion_Click"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
@@ -178,7 +179,8 @@
                         </Border>
                         <Border Grid.Row="2" Background="#FFFEFC" BorderBrush="#DCE9E6" BorderThickness="1" CornerRadius="12" Padding="15" Margin="0,0,0,12">
                             <StackPanel><TextBlock Text="SUPPORTED QUESTIONS" Foreground="#143E50" FontSize="11" FontWeight="Bold"/>
-                                <TextBlock Text="Duplicates · largest files · older files · photos · videos · documents · audio · archives · Downloads · Desktop · file extensions such as .pdf" Foreground="#688086" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                <TextBlock Text="Duplicates · largest files · older files · browser cache · photos · videos · documents · audio · archives · Downloads · Desktop · file extensions such as .pdf" Foreground="#688086" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                <TextBlock Text="Browser cache means recognized Chrome, Edge, Brave, and Firefox temporary cache files only. Review and select manually; cookies, history, passwords, and bookmarks are never included." Foreground="#688086" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
                                 <TextBlock Text="Suggestions are clues, not safety verdicts. Nothing is selected automatically." Foreground="#9B4D3B" FontSize="11" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
@@ -196,7 +198,7 @@
                         <Border Grid.Row="1" Background="White" CornerRadius="12" Padding="10" Margin="0,0,0,10">
                             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBox x:Name="SearchBox" Height="36" Padding="10,8" BorderBrush="#D6E6E5" ToolTip="Search file names and paths" TextChanged="SearchBox_TextChanged"/>
+                                    <TextBox x:Name="SearchBox" Height="36" Padding="10,8" BorderBrush="#D6E6E5" ToolTip="Search file names, folders, extensions, or any part of a path" Text="Search names, folders, extensions…" Foreground="#829498" GotKeyboardFocus="SearchBox_GotKeyboardFocus" LostKeyboardFocus="SearchBox_LostKeyboardFocus" TextChanged="SearchBox_TextChanged"/>
                                     <ComboBox x:Name="SortBox" Grid.Column="1" Width="146" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="SortBox_SelectionChanged"><ComboBoxItem Content="Largest first"/><ComboBoxItem Content="Name A–Z"/><ComboBoxItem Content="Oldest first"/></ComboBox>
                                     <Button Grid.Column="2" Content="Select all" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
                                     <Button Grid.Column="3" Content="Select visible" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="MarkVisible_Click"/>
