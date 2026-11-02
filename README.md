@@ -1,14 +1,16 @@
-# CleanMeScarlett
+# TidyCircuit
+
+![TidyCircuit brand mark](assets/wordmark.svg)
 
 ### A clearer view of your PC. A calmer way to clean.
 
-CleanMeScarlett is a free, open-source project for understanding storage and making careful cleanup decisions. The current release is a local folder analyzer and Windows maintenance guide. It does not delete files, run in the background, or upload your file list.
+TidyCircuit is a free, open-source project for understanding storage and making careful cleanup decisions. The current release is a local folder analyzer and Windows maintenance guide. It does not delete files, run in the background, or upload your file list.
 
-![CleanMeScarlett desktop dashboard](assets/dashboard-desktop.png)
+![TidyCircuit desktop dashboard](assets/dashboard-desktop.png)
 
 <details><summary>See the mobile layout</summary>
 
-![CleanMeScarlett mobile dashboard](assets/dashboard-mobile.png)
+![TidyCircuit mobile dashboard](assets/dashboard-mobile.png)
 
 </details>
 
@@ -31,6 +33,8 @@ CleanMeScarlett is a free, open-source project for understanding storage and mak
 
 The selected folder stays on your computer. The site reads file names and sizes supplied by the browser, and stores no scan results on a server. Folder selection support varies by browser; HTTPS or localhost is recommended for hosting.
 
+The [brand guide](BRAND.md) includes the logo, colors, and voice for contributors.
+
 ## Why this is different
 
 - **Specific recommendations.** A large file is an item to review, never automatic junk.
@@ -48,8 +52,9 @@ See the current [browser interface](index.html) and [implementation](app.js). Co
 
 The front end is static and can be hosted on GitHub Pages or a suitable static host. Vercel's free Hobby plan has [personal, non-commercial use terms](https://vercel.com/docs/plans/hobby); check them before using it for a public service.
 
-**CleanMeScarlett is a working project name.** An initial web search did not establish trademark clearance. Before a public launch or a costly rename, search the [USPTO trademark database](https://tmsearch.uspto.gov/) for exact and confusingly similar names, check state registries and existing product use, and consider a US trademark attorney. The [USPTO's clearance guide](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks) explains why an internet search alone is insufficient.
+**TidyCircuit is a working project name.** An initial web search did not establish trademark clearance. Before a public launch or a costly rename, search the [USPTO trademark database](https://tmsearch.uspto.gov/) for exact and confusingly similar names, check state registries and existing product use, and consider a US trademark attorney. The [USPTO's clearance guide](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks) explains why an internet search alone is insufficient.
 
 ## Privacy and safety
 
 The current web app performs read-only analysis in the browser. It does not request administrator access or connect to a cleanup service. Avoid placing private file names in screenshots or issue reports. Future diagnostics should be opt-in and inspectable before export.
+
