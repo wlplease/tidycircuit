@@ -1,60 +1,50 @@
 # TidyCircuit
 
-![TidyCircuit brand mark](assets/wordmark.svg)
+![TidyCircuit logo](assets/wordmark.svg)
 
-### A clearer view of your PC. A calmer way to clean.
+**A clearer view of your PC. A calmer way to clean.** TidyCircuit is a free, open-source PC care project with a coastal, sea-glass look. It helps you inspect files, understand your Windows system, and make deliberate cleanup decisions.
 
-TidyCircuit is a free, open-source project for understanding storage and making careful cleanup decisions. The current release is a local folder analyzer and Windows maintenance guide. It does not delete files, run in the background, or upload your file list.
+![Coastal TidyCircuit banner](assets/coastal-banner.svg)
 
 ![TidyCircuit desktop dashboard](assets/dashboard-desktop.png)
 
-<details><summary>See the mobile layout</summary>
+<details><summary>Mobile dashboard</summary>
 
 ![TidyCircuit mobile dashboard](assets/dashboard-mobile.png)
 
 </details>
 
-## What you can do now
+## Use it now
 
-| Feature | Available today | How it works |
-| --- | --- | --- |
-| Folder overview | Yes | Choose a folder; see file count, total size, and largest files. |
-| Duplicate candidates | Yes | Finds files with the same name and size for manual review. This does **not** prove their contents match. |
-| Organization ideas | Yes | Groups selected files by extension. No files are moved. |
-| Cache and temporary-file guidance | Yes | Points to the Windows, browser, or app controls that own each cache. |
-| RAM and battery health | Guide only | Shows how to use Task Manager and a Windows battery report. |
-| Whole-drive scan and cleanup | Planned | Requires a separate Windows application. |
+Open `index.html` in Edge or Chrome, or visit the [live demo](https://wlplease.github.io/CleanMeScarlett/) once deployed. Choose **Analyze a folder**. File names and contents stay in your browser; the site does not upload them.
 
-### Try it
+| Feature | Today |
+| --- | --- |
+| Folder review | Search, filter by extension or folder, sort by size, name, or age; see paths and dates. |
+| Duplicate verification | SHA-256 compares same-size files locally. Files over 256 MB or unreadable files are skipped and labeled. No automatic deletion. |
+| Review list | Mark files, see the total, and export a TSV for manual follow-up. |
+| Organization ideas | Extension groups for the selected folder; no automatic moves. |
+| Windows companion | Export actual drive, RAM, battery charge, and current-user TEMP inventory to a JSON report. |
+| Recoverable cleanup | Explicitly move one eligible old user TEMP file to local quarantine, log it, and restore by operation ID. |
 
-1. Open [the dashboard](index.html) in a current version of Edge or Chrome, or serve this repository as a static site.
-2. Select **Analyze a folder** and choose a folder you want to inspect.
-3. Review the largest files, duplicate candidates, and organization ideas. Decide what to change in Windows File Explorer.
+The browser cannot see whole-drive usage, live RAM, battery health, or system caches on its own. Its file picker requires you to select a folder. For Windows data and scoped cleanup, see the [companion guide](companion/README.md). The companion is source code, not a signed public installer.
 
-The selected folder stays on your computer. The site reads file names and sizes supplied by the browser, and stores no scan results on a server. Folder selection support varies by browser; HTTPS or localhost is recommended for hosting.
+## Safety and privacy
 
-The [brand guide](BRAND.md) includes the logo, colors, and voice for contributors.
+- No account, telemetry, file upload, background scan, or automatic deletion.
+- A matching hash verifies identical file contents for files that were successfully checked; it does not mean either copy is safe to remove.
+- The companion only inventories current-user TEMP files older than the selected age. Quarantine requires an exact path and confirmation. Restore is available while the quarantined file remains.
+- Windows Storage Sense handles OS temporary files and update cleanup. TidyCircuit links to [Microsoft's Storage Sense guidance](https://learn.microsoft.com/windows/configuration/storage/storage-sense) instead of editing system cache folders directly.
 
-## Why this is different
+## Project files
 
-- **Specific recommendations.** A large file is an item to review, never automatic junk.
-- **Honest status.** The website does not invent drive, RAM, or battery readings it cannot access.
-- **No risky shortcuts.** No registry cleaning, RAM booster, SSD defrag, or automatic removal of personal folders.
-- **A visible path to a real cleaner.** The planned Windows companion will show exact targets, estimated space, effects, and recovery options before any action.
+- [Brand guide](BRAND.md) — color palette, logo, and voice
+- [Windows companion](companion/README.md) — report, plan, quarantine, restore
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT license](LICENSE)
 
-## Planned Windows companion
+## Hosting and name
 
-The next major milestone is an optional local Windows application. The design calls for drive and memory details, battery diagnostics, a storage explorer, verified duplicate detection, and a reviewable cleanup queue. File changes will require explicit confirmation. A release intended for public use also needs a threat model, signed binaries, and a documented build process.
+This is a static front end suitable for a static host. Vercel Hobby has [personal, non-commercial terms](https://vercel.com/docs/plans/hobby); review the terms for your use.
 
-See the current [browser interface](index.html) and [implementation](app.js). Contributions and product feedback are welcome through GitHub issues.
-
-## Hosting and project name
-
-The front end is static and can be hosted on GitHub Pages or a suitable static host. Vercel's free Hobby plan has [personal, non-commercial use terms](https://vercel.com/docs/plans/hobby); check them before using it for a public service.
-
-**TidyCircuit is a working project name.** An initial web search did not establish trademark clearance. Before a public launch or a costly rename, search the [USPTO trademark database](https://tmsearch.uspto.gov/) for exact and confusingly similar names, check state registries and existing product use, and consider a US trademark attorney. The [USPTO's clearance guide](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks) explains why an internet search alone is insufficient.
-
-## Privacy and safety
-
-The current web app performs read-only analysis in the browser. It does not request administrator access or connect to a cleanup service. Avoid placing private file names in screenshots or issue reports. Future diagnostics should be opt-in and inspectable before export.
+**TidyCircuit remains a working name.** A basic web search found no obvious exact-name software match, but that is not US trademark clearance or proof a domain is available. Follow the [USPTO clearance guidance](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks), including similar marks and existing commercial use, before registering the name or committing to a public product launch.
 

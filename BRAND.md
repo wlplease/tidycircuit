@@ -14,14 +14,14 @@
 
 | Role | Hex | Use |
 | --- | --- | --- |
-| Deep pine | `#173D38` | Primary text, logo ground |
-| Evergreen | `#17634E` | Primary actions |
-| Fresh mint | `#BCE7D2` | Circuit traces, highlights |
-| Mist | `#F2F7F3` | Page background |
-| Warm apricot | `#F4B678` | Small accents and status details |
+| Deep ocean | `#143E50` | Primary text, logo ground |
+| Lagoon | `#096D78` | Primary actions |
+| Sea glass | `#7EE0D1` | Circuit traces, highlights |
+| Sail cloth | `#F4F7F3` | Page background |
+| Miami coral | `#F37E69` | Small accents and status details |
 | White | `#FFFFFF` | Cards and working surfaces |
 
-Use apricot sparingly; green carries the main hierarchy. Never use color alone to explain a cleanup risk.
+Use coral sparingly; ocean blue carries the main hierarchy. Never use color alone to explain a cleanup risk.
 
 ## Naming check
 

@@ -1,142 +1,20 @@
-const formatBytes = (bytes) => {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / (1024 ** index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-};
+const formatBytes = bytes => { if (!bytes) return '0 B'; const units=['B','KB','MB','GB','TB']; const i=Math.min(Math.floor(Math.log(bytes)/Math.log(1024)),4); return `${(bytes/1024**i).toFixed(i?1:0)} ${units[i]}`; };
+const $ = selector => document.querySelector(selector);
+const picker=$('#folder-picker'), panel=$('#analyze'), toast=$('#toast');
+let files=[], marked=new Set(), scanId=0, toastTimer;
+function announce(message){toast.textContent=message;toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),3500);}
+function pathOf(file){return file.webkitRelativePath||file.name;}
+function extensionOf(file){const index=file.name.lastIndexOf('.');return index>0?file.name.slice(index+1).toLowerCase():'(none)';}
+function folderOf(file){const path=pathOf(file);return path.includes('/')?path.slice(0,path.lastIndexOf('/')):'(root)';}
+function row(label,detail){const item=document.createElement('div');item.className='file-item';const name=document.createElement('span');name.className='file-item-name';name.textContent=label;name.title=label;const meta=document.createElement('span');meta.className='file-item-size';meta.textContent=detail;item.append(name,meta);return item;}
+function populate(select,values){select.replaceChildren(new Option('All '+(select.id==='type-filter'?'types':'folders'),'all'));for(const value of [...values].sort())select.add(new Option(value,value));}
+function renderFiles(){const term=$('#file-search').value.toLowerCase(),type=$('#type-filter').value,folder=$('#folder-filter').value,sort=$('#sort-files').value;const visible=files.filter(file=>pathOf(file).toLowerCase().includes(term)&&(type==='all'||extensionOf(file)===type)&&(folder==='all'||folderOf(file)===folder)).sort((a,b)=>sort==='age'?a.lastModified-b.lastModified:sort==='name'?pathOf(a).localeCompare(pathOf(b)):b.size-a.size);$('#review-count').textContent=`${visible.length.toLocaleString()} shown`;const list=$('#file-list');list.replaceChildren();for(const file of visible.slice(0,250)){const item=document.createElement('label');item.className='file-item review-row';const check=document.createElement('input');check.type='checkbox';check.checked=marked.has(pathOf(file));check.addEventListener('change',()=>{check.checked?marked.add(pathOf(file)):marked.delete(pathOf(file));updateMarked();});const name=document.createElement('span');name.className='file-item-name';name.textContent=pathOf(file);name.title=pathOf(file);const meta=document.createElement('span');meta.className='file-item-size';meta.textContent=`${formatBytes(file.size)} · ${new Date(file.lastModified).toLocaleDateString()}`;item.append(check,name,meta);list.append(item);}if(!visible.length)list.append(row('No files match these filters',''));if(visible.length>250)list.append(row('Showing first 250 files','Narrow filters to see more'));}
+function updateMarked(){const selected=files.filter(file=>marked.has(pathOf(file)));$('#marked-total').textContent=`${selected.length} files · ${formatBytes(selected.reduce((sum,file)=>sum+file.size,0))}`;}
+function renderOrganization(){const map=new Map();for(const file of files){const key=extensionOf(file);map.set(key,(map.get(key)||0)+1);}const list=$('#organize-list');list.replaceChildren();for(const [type,count] of [...map].sort((a,b)=>b[1]-a[1]).slice(0,8))list.append(row(type==='(none)'?'Files without an extension':`.${type} files`,`${count} files`));if(!map.size)list.append(row('No files in this folder',''));}
+async function sha256(file){const buffer=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',buffer);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
+async function verifyDuplicates(id){const bySize=new Map();for(const file of files){if(!file.size)continue;if(!bySize.has(file.size))bySize.set(file.size,[]);bySize.get(file.size).push(file);}const candidates=[...bySize.values()].filter(group=>group.length>1).flat();const list=$('#duplicate-list');list.replaceChildren();if(!candidates.length){$('#hash-status').textContent='No same-size files';list.append(row('No duplicate candidates found',''));return;}if(!crypto?.subtle){$('#hash-status').textContent='Hashing requires HTTPS or localhost';list.append(row('Open this site over HTTPS or localhost to verify duplicates',''));return;}const byHash=new Map();let done=0,skipped=0;for(const file of candidates){if(id!==scanId)return;try{if(file.size>268435456){skipped++;done++;$('#hash-status').textContent=`Hashed ${done}/${candidates.length} · ${skipped} skipped (>256 MB or unreadable)`;continue;}const hash=await sha256(file);const key=`${file.size}:${hash}`;if(!byHash.has(key))byHash.set(key,[]);byHash.get(key).push(file);}catch{skipped++;}done++;$('#hash-status').textContent=`Hashed ${done}/${candidates.length} · ${skipped} skipped (>256 MB or unreadable)`;await new Promise(resolve=>setTimeout(resolve,0));}if(id!==scanId)return;const groups=[...byHash.values()].filter(group=>group.length>1);$('#duplicate-count').textContent=groups.reduce((sum,group)=>sum+group.length-1,0).toLocaleString();$('#hash-status').textContent=`SHA-256 checked locally · ${skipped} skipped (>256 MB or unreadable)`;for(const group of groups){list.append(row(`${group.length} identical files · ${formatBytes(group[0].size)} each`,group.map(pathOf).join(' · ')));}if(!groups.length)list.append(row('No identical file contents found',''));}
+function analyzeFiles(selected){scanId++;files=[...selected];marked=new Set();const total=files.reduce((sum,file)=>sum+file.size,0),largest=files.reduce((max,file)=>Math.max(max,file.size),0),folder=pathOf(files[0]||{name:'Selected folder'}).split('/')[0];$('#analysis-title').textContent=`A closer look at ${folder}.`;$('#analysis-subtitle').textContent='File analysis stays in this browser. No files are moved or deleted.';$('#file-count').textContent=files.length.toLocaleString();$('#folder-size').textContent=formatBytes(total);$('#largest-file').textContent=formatBytes(largest);$('#duplicate-count').textContent='0';$('#metric-storage').textContent=formatBytes(total);$('#metric-storage-detail').textContent=`${files.length.toLocaleString()} files · selected folder only`;const status=$('#metric-storage').closest('.metric-card').querySelector('.metric-status');status.className='metric-status local';status.innerHTML='<i></i> ANALYZED LOCALLY';populate($('#type-filter'),new Set(files.map(extensionOf)));populate($('#folder-filter'),new Set(files.map(folderOf)));$('#file-search').value='';$('#sort-files').value='size';renderFiles();renderOrganization();updateMarked();panel.hidden=false;panel.scrollIntoView({behavior:'smooth',block:'start'});verifyDuplicates(scanId);}
+for(const selector of ['#choose-folder','#scan-button','.rec-folder','#choose-another','[data-action="folder"]'])$(selector).addEventListener('click',()=>picker.click());picker.addEventListener('change',()=>{if(picker.files?.length)analyzeFiles(picker.files);picker.value='';});for(const selector of ['#file-search','#type-filter','#folder-filter','#sort-files'])$(selector).addEventListener('input',renderFiles);$('#export-review').addEventListener('click',()=>{const selected=files.filter(file=>marked.has(pathOf(file)));if(!selected.length){announce('Mark files first to create a review list.');return;}const content=['TidyCircuit review list — no files were changed','Path\tBytes\tModified',...selected.map(file=>`${pathOf(file)}\t${file.size}\t${new Date(file.lastModified).toISOString()}`)].join('\n');const url=URL.createObjectURL(new Blob([content],{type:'text/plain'}));const link=document.createElement('a');link.href=url;link.download='tidycircuit-review.tsv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});$('#close-analysis').addEventListener('click',()=>panel.hidden=true);$('#dismiss-notice').addEventListener('click',event=>event.currentTarget.closest('.notice').remove());$('.icon-button[title="Help and information"]').addEventListener('click',()=>announce('Choose a folder to review files locally. Nothing is changed.'));$('.profile-button').addEventListener('click',()=>announce('This workspace stays on your device. No account needed.'));$('.guide-button[href="ms-settings:storagepolicies"]').addEventListener('click',()=>announce('Opening Windows Storage settings. If it does not open, search Settings for Storage Sense.'));
 
-const picker = document.querySelector('#folder-picker');
-const panel = document.querySelector('#analysis-panel');
-const toast = document.querySelector('#toast');
-let toastTimer;
-const announce = (message) => {
-  toast.textContent = message;
-  toast.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
-};
 
-function analyzeFiles(selectedFiles) {
-  const files = [...selectedFiles];
-  const total = files.reduce((sum, file) => sum + file.size, 0);
-  const sorted = [...files].sort((a, b) => b.size - a.size);
-  const largest = sorted[0];
-  const path = files.find(file => file.webkitRelativePath)?.webkitRelativePath || '';
-  const folder = path.split('/')[0] || 'Selected files';
-  document.querySelector('#analysis-title').textContent = `A closer look at ${folder}.`;
-  document.querySelector('#analysis-subtitle').textContent = 'This overview was created in your browser. The file list was not sent anywhere.';
-  document.querySelector('#file-count').textContent = files.length.toLocaleString();
-  document.querySelector('#folder-size').textContent = formatBytes(total);
-  document.querySelector('#largest-file').textContent = largest ? formatBytes(largest.size) : '—';
-  document.querySelector('#metric-storage').textContent = formatBytes(total);
-  document.querySelector('#metric-storage-detail').textContent = `${files.length.toLocaleString()} files analyzed · selected folder only`;
-  document.querySelectorAll('.metric-status.unknown').forEach(status => {
-    if (status.closest('.metric-card')?.querySelector('#metric-storage')) {
-      status.classList.remove('unknown');
-      status.classList.add('local');
-      status.innerHTML = '<i></i> ANALYZED LOCALLY';
-    }
-  });
-
-  const fileList = document.querySelector('#file-list');
-  fileList.replaceChildren();
-  sorted.slice(0, 8).forEach(file => {
-    const row = document.createElement('div');
-    row.className = 'file-item';
-    const name = document.createElement('span');
-    name.className = 'file-item-name';
-    name.textContent = file.webkitRelativePath || file.name;
-    name.title = name.textContent;
-    const size = document.createElement('span');
-    size.className = 'file-item-size';
-    size.textContent = formatBytes(file.size);
-    row.append(name, size);
-    fileList.append(row);
-  });
-  if (!files.length) {
-    const empty = document.createElement('div');
-    empty.className = 'file-item';
-    empty.textContent = 'This folder looks empty, or contains only empty files.';
-    fileList.append(empty);
-  }
-
-  const groups = new Map();
-  for (const file of files) {
-    if (!file.size) continue;
-    const key = `${file.name.toLocaleLowerCase()}|${file.size}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(file);
-  }
-  const duplicates = [...groups.values()].filter(group => group.length > 1);
-  document.querySelector('#duplicate-count').textContent = duplicates.reduce((sum, group) => sum + group.length - 1, 0).toLocaleString();
-  const duplicateList = document.querySelector('#duplicate-list');
-  duplicateList.replaceChildren();
-  duplicates.slice(0, 6).forEach(group => {
-    const row = document.createElement('div');
-    row.className = 'file-item';
-    const names = document.createElement('span');
-    names.className = 'file-item-name';
-    names.textContent = `${group[0].name} · ${group.length} matching files`;
-    names.title = group.map(file => file.webkitRelativePath || file.name).join('\n');
-    const size = document.createElement('span');
-    size.className = 'file-item-size';
-    size.textContent = `${formatBytes(group[0].size)} each`;
-    row.append(names, size);
-    duplicateList.append(row);
-  });
-  if (!duplicates.length) {
-    const empty = document.createElement('div');
-    empty.className = 'file-item';
-    empty.textContent = 'No matching name-and-size candidates in this selection.';
-    duplicateList.append(empty);
-  }
-
-  const categories = new Map();
-  for (const file of files) {
-    const extension = file.name.includes('.') ? file.name.split('.').pop().toLocaleLowerCase() : '(no extension)';
-    categories.set(extension, (categories.get(extension) || 0) + 1);
-  }
-  const organizeList = document.querySelector('#organize-list');
-  organizeList.replaceChildren();
-  [...categories.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([extension, count]) => {
-    const row = document.createElement('div');
-    row.className = 'file-item';
-    row.innerHTML = `<span class="file-item-name"></span><span class="file-item-size"></span>`;
-    row.firstElementChild.textContent = extension === '(no extension)' ? 'Files without an extension' : `.${extension} files`;
-    row.lastElementChild.textContent = `${count.toLocaleString()} ${count === 1 ? 'file' : 'files'}`;
-    organizeList.append(row);
-  });
-  if (!files.length) {
-    const empty = document.createElement('div');
-    empty.className = 'file-item';
-    empty.textContent = 'Choose a folder containing files to get organization ideas.';
-    organizeList.append(empty);
-  }
-  panel.hidden = false;
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-document.querySelector('#choose-folder').addEventListener('click', () => picker.click());
-document.querySelector('#scan-button').addEventListener('click', () => picker.click());
-document.querySelector('.rec-folder').addEventListener('click', () => picker.click());
-document.querySelector('#choose-another').addEventListener('click', () => picker.click());
-document.querySelectorAll('[data-action="folder"]').forEach(button => button.addEventListener('click', () => picker.click()));
-picker.addEventListener('change', () => {
-  if (picker.files?.length) analyzeFiles(picker.files);
-  picker.value = '';
-});
-document.querySelector('#close-analysis').addEventListener('click', () => { panel.hidden = true; });
-document.querySelector('#dismiss-notice').addEventListener('click', (event) => event.currentTarget.closest('.notice').remove());
-document.querySelector('.icon-button[title="Help and information"]').addEventListener('click', () => announce('Choose a folder to view its file count and largest files. Nothing is changed.'));
-document.querySelector('.profile-button').addEventListener('click', () => announce('This workspace stays on this device. No account needed.'));
-
-const storageLink = document.querySelector('.guide-button');
-storageLink.addEventListener('click', event => {
-  event.preventDefault();
-  announce('Opening Windows Storage settings. If it does not open, search Windows Settings for “Storage Sense”.');
-  window.location.href = storageLink.href;
-});
-
-if (!('webkitdirectory' in document.createElement('input'))) {
-  document.querySelectorAll('#choose-folder, #scan-button, .rec-folder, #choose-another, [data-action="folder"]').forEach(button => button.addEventListener('click', () => announce('Folder selection is not supported by this browser. Try Chrome or Edge on HTTPS, or use a local file picker.')));
-}
+$('#report-picker').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;try{const report=JSON.parse(await file.text());if(report.schema!=='tidycircuit.report.v1'||!Array.isArray(report.drives))throw new Error('Unsupported report');const drives=report.drives.map(d=>`${d.name}: ${formatBytes(d.freeBytes)} free of ${formatBytes(d.sizeBytes)}`).join(' · ');$('#metric-storage').textContent=drives||'No fixed drives';$('#metric-storage-detail').textContent=`Windows report · ${new Date(report.createdAt).toLocaleString()}`;if(report.memory){$('#metric-ram').textContent=`${formatBytes(report.memory.totalBytes-report.memory.freeBytes)} / ${formatBytes(report.memory.totalBytes)}`;$('#metric-ram').nextElementSibling.textContent='In use / installed · Windows report';}if(report.battery){$('#metric-battery').textContent=`${report.battery.chargePercent}% charge`;$('#metric-battery').nextElementSibling.textContent='Battery charge · Windows report';}announce(`Report imported. ${report.cleanup?.candidateCount||0} older user temp files identified.`);}catch{announce('This is not a supported TidyCircuit report.');}event.target.value='';});
