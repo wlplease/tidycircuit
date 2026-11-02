@@ -56,6 +56,7 @@
                     <Button x:Name="OverviewNavButton" Style="{StaticResource NavButton}" Content="▦   Overview" Tag="0" Background="#DDF4EF" Foreground="#087D86" Click="Navigate_Click"/>
                     <Button x:Name="SmartFindNavButton" Style="{StaticResource NavButton}" Content="⌕   Smart find" Tag="1" Click="Navigate_Click"/>
                     <Button x:Name="ReviewFilesNavButton" Style="{StaticResource NavButton}" Content="▤   Review files" Tag="2" Click="Navigate_Click"/>
+                    <Button x:Name="GuideNavButton" Style="{StaticResource NavButton}" Content="✦   Guide chat" Tag="3" Click="Navigate_Click"/>
                     <TextBlock Text="WINDOWS TOOLS" Foreground="#829498" FontSize="9" FontWeight="Bold" Margin="5,24,0,8"/>
                     <Button Style="{StaticResource NavButton}" Content="◉   System details" Click="System_Click"/>
                     <Button Style="{StaticResource NavButton}" Content="◇   Windows Security" Click="Safety_Click"/>
@@ -238,6 +239,29 @@
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Border>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="Guide chat">
+                    <Grid Margin="0,4,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <Border Background="#E7F5F2" CornerRadius="13" Padding="20" Margin="0,0,0,12"><StackPanel>
+                            <TextBlock Text="TIDYCIRCUIT GUIDE" Foreground="#087D86" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="Ask about your cleanup." Foreground="#143E50" FontSize="24" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                            <TextBlock Text="Built-in answers · remembers this conversation until you close the app · no cloud AI" Foreground="#688086" FontSize="12" Margin="0,4,0,0"/>
+                        </StackPanel></Border>
+                        <Border Grid.Row="1" Background="White" CornerRadius="13" Padding="12">
+                            <ListBox x:Name="ChatMessagesList" BorderThickness="0" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListBox.ItemTemplate><DataTemplate><Border Background="{Binding BubbleBrush}" CornerRadius="12" Padding="13" Margin="4,3" MaxWidth="680" HorizontalAlignment="{Binding Alignment}"><TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="{Binding TextBrush}" FontSize="13"/></Border></DataTemplate></ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                        <WrapPanel Grid.Row="2" Margin="0,10,0,7">
+                            <Button Content="What can it clean?" Tag="What can it clean?" Background="White" Foreground="#087D86" Margin="0,0,7,0" Click="ChatSuggestion_Click"/>
+                            <Button Content="How do duplicates work?" Tag="How do duplicates work?" Background="White" Foreground="#087D86" Margin="0,0,7,0" Click="ChatSuggestion_Click"/>
+                            <Button Content="Is my data uploaded?" Tag="Is my data uploaded?" Background="White" Foreground="#087D86" Click="ChatSuggestion_Click"/>
+                        </WrapPanel>
+                        <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="ChatInput" Height="44" Padding="12,10" FontSize="13" ToolTip="Ask about TidyCircuit" KeyDown="ChatInput_KeyDown"/>
+                            <Button Grid.Column="1" Content="Send" Background="#087D86" Foreground="White" Margin="9,0,0,0" Padding="20,10" Click="ChatSend_Click"/>
+                        </Grid>
                     </Grid>
                 </TabItem>
             </TabControl>

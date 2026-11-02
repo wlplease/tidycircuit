@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private static readonly HashSet<string> ProtectedFileTypes = new(StringComparer.OrdinalIgnoreCase) { ".exe", ".dll", ".sys", ".drv", ".ocx", ".msi", ".msp", ".cab", ".cat", ".inf", ".bat", ".cmd", ".ps1", ".psm1", ".reg", ".lnk", ".scr", ".com" };
     private readonly BulkObservableCollection<FileRow> _rows = new();
     private readonly BulkObservableCollection<FileRow> _visibleRows = new();
+    private readonly ObservableCollection<GuideChatMessage> _chatMessages = new();
     private readonly DispatcherTimer _searchDebounce = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private string _selectedRoot = "";
     private Func<FileRow, bool> _smartFilter = _ => true;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private bool _scanPaused;
     private bool _filterPaused;
     private bool _automaticScan;
+    private string _lastGuideTopic = "";
     private int _visibleExtraCount;
     private bool _syncingSort;
     private bool _limitLargestResults;
@@ -43,6 +45,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent(); FilesGrid.ItemsSource = _visibleRows;
+        ChatMessagesList.ItemsSource = _chatMessages;
+        _chatMessages.Add(GuideChatMessage.Assistant("Hi! I can explain scans, duplicates, cleanup safety, privacy, and Windows security. I can’t inspect your PC or provide live support."));
         FilesGrid.Sorting += FilesGrid_Sorting;
         UpdateSortIndicators();
         _searchDebounce.Tick += async (_, _) => { _searchDebounce.Stop(); await ApplyCurrentFiltersAsync(); };
@@ -507,7 +511,7 @@ public partial class MainWindow : Window
     private void SetActiveNavigation()
     {
         if (OverviewNavButton is null) return;
-        var buttons = new[] { OverviewNavButton, SmartFindNavButton, ReviewFilesNavButton };
+        var buttons = new[] { OverviewNavButton, SmartFindNavButton, ReviewFilesNavButton, GuideNavButton };
         for (var i = 0; i < buttons.Length; i++)
         {
             var active = MainTabs.SelectedIndex == i;
@@ -531,6 +535,48 @@ public partial class MainWindow : Window
         await ApplySmartQueryAsync();
     }
     private void ReviewMatches_Click(object sender, RoutedEventArgs e) { MainTabs.SelectedIndex = 2; SetActiveNavigation(); }
+    private void ChatSuggestion_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string question }) AddChatExchange(question);
+    }
+    private void ChatSend_Click(object sender, RoutedEventArgs e) => SendChatMessage();
+    private void ChatInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) { SendChatMessage(); e.Handled = true; }
+    }
+    private void SendChatMessage()
+    {
+        var question = ChatInput.Text.Trim();
+        if (question.Length == 0) return;
+        AddChatExchange(question); ChatInput.Clear(); ChatInput.Focus();
+    }
+    private void AddChatExchange(string question)
+    {
+        _chatMessages.Add(GuideChatMessage.User(question));
+        var normalized = question.ToLowerInvariant();
+        var topic = normalized.Contains("privacy") || normalized.Contains("upload") || normalized.Contains("data") ? "privacy"
+            : normalized.Contains("duplicate") || normalized.Contains("copy") || normalized.Contains("hash") ? "duplicates"
+            : normalized.Contains("clean") || normalized.Contains("cache") || normalized.Contains("temporary") || normalized.Contains("delete") || normalized.Contains("remove") ? "cleanup"
+            : normalized.Contains("virus") || normalized.Contains("malware") || normalized.Contains("defender") || normalized.Contains("security") ? "security"
+            : normalized.Contains("ram") || normalized.Contains("battery") || normalized.Contains("health") ? "health"
+            : normalized.Contains("sort") || normalized.Contains("organ") || normalized.Contains("folder") || normalized.Contains("file") ? "organize"
+            : normalized.Contains("it") || normalized.Contains("that") || normalized.Contains("more") || normalized.Contains("how") ? _lastGuideTopic
+            : "";
+        var answer = topic switch
+        {
+            "privacy" => "Scans and searches run locally. TidyCircuit does not upload file lists or hashes. Exported reports and the operation log stay on your PC.",
+            "duplicates" => "Same-size files are compared with SHA-256. Verified groups label one keep candidate and the identical extras. Nothing is selected automatically; review paths before using Recycle Bin.",
+            "cleanup" => "Find temporary files checks recognized Chrome, Edge, Brave, and Firefox caches plus direct .tmp/.temp files in your user Temp folder that are at least 7 days old. You review and confirm. Windows and arbitrary app caches are excluded.",
+            "security" => "TidyCircuit does not detect malware. Open Windows Security and run a Microsoft Defender scan there.",
+            "health" => "TidyCircuit does not read live RAM, battery, or full PC health data. Use Windows Settings or Task Manager for those details.",
+            "organize" => "Review files can sort by name, full path, type, size, age, copy role, and modified date. You decide what to move; nothing is automatically reorganized.",
+            _ => "I have built-in guidance for scans, cleanup scope, duplicates, privacy, sorting, and Windows Security. I can’t inspect your PC or answer questions outside TidyCircuit. Try one of those topics."
+        };
+        if (!string.IsNullOrEmpty(topic)) _lastGuideTopic = topic;
+        _chatMessages.Add(GuideChatMessage.Assistant(answer));
+        if (_chatMessages.Count > 61) _chatMessages.RemoveAt(1);
+        ChatMessagesList.ScrollIntoView(_chatMessages[^1]);
+    }
     private async Task ApplySmartQueryAsync()
     {
         var query = AskBox.Text.Trim();
@@ -922,6 +968,11 @@ public partial class MainWindow : Window
     }
 }
 public readonly record struct ScanInventoryProgress(int Files, int Folders, string CurrentFolder);
+public sealed record GuideChatMessage(string Text, string BubbleBrush, string TextBrush, HorizontalAlignment Alignment)
+{
+    public static GuideChatMessage Assistant(string text) => new(text, "#EEF6F4", "#264D56", HorizontalAlignment.Left);
+    public static GuideChatMessage User(string text) => new(text, "#087D86", "White", HorizontalAlignment.Right);
+}
 public sealed record TemporaryFindResult(List<FileRow> Files, int Locations, int Errors);
 public sealed class InlineProgress<T>(Action<T> report) : IProgress<T> { public void Report(T value) => report(value); }
 public sealed record CleanupResult(List<FileRow> Moved, int Skipped, bool LogWarning, string? StoppedOn, bool Cancelled);
