@@ -15,6 +15,8 @@ namespace TidyCircuit;
 
 public partial class MainWindow : Window
 {
+    private static readonly HashSet<string> ProtectedPathParts = new(StringComparer.OrdinalIgnoreCase) { "Windows", "Windows.old", "WindowsApps", "Program Files", "Program Files (x86)", "ProgramData", "Recovery", "EFI", "Boot", "WinSxS", "Installer", "$Recycle.Bin", "System Volume Information" };
+    private static readonly HashSet<string> ProtectedFileTypes = new(StringComparer.OrdinalIgnoreCase) { ".exe", ".dll", ".sys", ".drv", ".ocx", ".msi", ".msp", ".cab", ".cat", ".inf", ".bat", ".cmd", ".ps1", ".psm1", ".reg", ".lnk", ".scr", ".com" };
     private readonly BulkObservableCollection<FileRow> _rows = new();
     private readonly BulkObservableCollection<FileRow> _visibleRows = new();
     private readonly DispatcherTimer _searchDebounce = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     private bool _isUpdatingMarks;
     private bool _scanPaused;
     private bool _filterPaused;
+    private bool _automaticScan;
     private bool _limitLargestResults;
     private long _filterRequest;
     private string _assistantSummary = "Suggestions use file size, dates, names, and local content hashes. They never decide a file is safe to remove.";
@@ -52,18 +55,76 @@ public partial class MainWindow : Window
     {
         var dialog = new OpenFolderDialog { Title = "Choose one folder for a local scan", Multiselect = false };
         if (dialog.ShowDialog(this) != true) return;
+        _automaticScan = false;
         _selectedRoot = dialog.FolderName;
         SelectedRootText.Text = _selectedRoot;
         await ScanFolderAsync(_selectedRoot);
     }
     private async void ScanAgain_Click(object sender, RoutedEventArgs e)
     {
+        if (_automaticScan) { await FindTemporaryFilesAsync(); return; }
         if (!string.IsNullOrWhiteSpace(_selectedRoot)) await ScanFolderAsync(_selectedRoot);
         else ChooseFolder_Click(sender, e);
     }
+    private async void FindCaches_Click(object sender, RoutedEventArgs e) => await FindTemporaryFilesAsync();
+    private async Task FindTemporaryFilesAsync()
+    {
+        _automaticScan = true; _selectedRoot = "";
+        SelectedRootText.Text = "Finding recognized browser caches and older temporary files…";
+        ScanButton.IsEnabled = FolderButton.IsEnabled = FindCachesButton.IsEnabled = false;
+        CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = true;
+        CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Visible;
+        PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
+        _scanCancellation = new CancellationTokenSource(); var token = _scanCancellation.Token;
+        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
+        FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "Searching…";
+        StatusText.Text = "Checking common cache and temporary locations · nothing is changed"; ProgressText.Text = "Starting local search…";
+        ScanProgress.IsIndeterminate = true;
+        try
+        {
+            var progress = new Progress<ScanInventoryProgress>(update =>
+            {
+                if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Finding files · {update.Files:N0} checked · {update.CurrentFolder}";
+            });
+            var result = await Task.Run(() => FindSafeTemporaryFilesCore(token, progress, _scanPauseGate));
+            token.ThrowIfCancellationRequested();
+            System.ComponentModel.PropertyChangedEventHandler markedChanged = FileRow_PropertyChanged;
+            foreach (var row in result.Files) row.PropertyChanged += markedChanged;
+            _rows.AddRange(result.Files.OrderByDescending(file => file.Size));
+            _selectedRoot = "";
+            SelectedRootText.Text = "Common locations · browser cache + older user temporary files";
+            FileCountText.Text = result.Files.Count.ToString("N0"); FolderSizeText.Text = Format(result.Files.Sum(file => file.Size));
+            DuplicatesText.Text = "—";
+            _smartFilter = _ => true; _limitLargestResults = false;
+            _assistantSummary = "Found recognized browser cache and older user temporary files. Review each result; nothing is selected automatically.";
+            SearchBox.Text = SearchHint; AskBox.Text = AskHint; _searchDebounce.Stop();
+            MainTabs.SelectedIndex = 2; SetActiveNavigation();
+            await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
+            StatusText.Text = result.Errors == 0
+                ? $"Found {result.Files.Count:N0} files · browser cache + user temp files idle 7+ days · nothing changed"
+                : $"Found {result.Files.Count:N0} files · {result.Errors:N0} read issue(s) · nothing changed";
+        }
+        catch (OperationCanceledException)
+        {
+            _rows.Clear(); _visibleRows.Clear(); FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "—";
+            StatusText.Text = "Search canceled · no files were changed"; SelectedRootText.Text = "No folder selected";
+        }
+        catch (Exception ex)
+        {
+            _rows.Clear(); _visibleRows.Clear(); FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "—";
+            StatusText.Text = "Temporary file search failed · " + ex.Message;
+        }
+        finally
+        {
+            ProgressText.Text = ""; ScanProgress.IsIndeterminate = false; ScanButton.IsEnabled = FolderButton.IsEnabled = FindCachesButton.IsEnabled = true;
+            CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = false;
+            CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Collapsed;
+            _scanPaused = false; _scanPauseGate.Set(); _scanCancellation?.Dispose(); _scanCancellation = null;
+        }
+    }
     private async Task ScanFolderAsync(string root)
     {
-        ScanButton.IsEnabled = FolderButton.IsEnabled = false;
+        ScanButton.IsEnabled = FolderButton.IsEnabled = FindCachesButton.IsEnabled = false;
         CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = true;
         CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Visible;
         PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
@@ -110,7 +171,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            ProgressText.Text = ""; ScanProgress.IsIndeterminate = false; ScanButton.IsEnabled = FolderButton.IsEnabled = true;
+            ProgressText.Text = ""; ScanProgress.IsIndeterminate = false; ScanButton.IsEnabled = FolderButton.IsEnabled = FindCachesButton.IsEnabled = true;
             CancelScanButton.IsEnabled = PauseScanButton.IsEnabled = false;
             CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Collapsed;
             _scanPaused = false; _scanPauseGate.Set();
@@ -150,7 +211,7 @@ public partial class MainWindow : Window
                 {
                     token.ThrowIfCancellationRequested();
                     pauseGate.Wait(token);
-                    try { var info = new FileInfo(path); files.Add(new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = Path.GetRelativePath(root, info.FullName), Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension }); }
+                    try { var info = new FileInfo(path); files.Add(new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = Path.GetRelativePath(root, info.FullName), ScanRoot = root, Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension }); }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
                     if (files.Count % 500 == 0) progress.Report(new(files.Count, folders, currentFolder));
                 }
@@ -159,6 +220,83 @@ public partial class MainWindow : Window
         }
         if (!token.IsCancellationRequested) progress.Report(new(files.Count, folders, currentFolder));
         return (files, errors);
+    }
+    private static TemporaryFindResult FindSafeTemporaryFilesCore(CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate)
+    {
+        var candidates = new List<FileRow>(); var errors = 0; var locations = 0; var checkedFiles = 0;
+        var cacheRoots = new List<string>();
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        void AddProfiles(string userDataRoot)
+        {
+            if (!Directory.Exists(userDataRoot)) return;
+            var options = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint };
+            try
+            {
+                foreach (var profile in Directory.EnumerateDirectories(userDataRoot, "*", options))
+                {
+                    var name = Path.GetFileName(profile);
+                    if (!name.Equals("Default", StringComparison.OrdinalIgnoreCase) && !name.StartsWith("Profile ", StringComparison.OrdinalIgnoreCase) && !name.Equals("Guest Profile", StringComparison.OrdinalIgnoreCase)) continue;
+                    var cacheRoot = Path.Combine(profile, "Cache", "Cache_Data");
+                    if (Directory.Exists(cacheRoot)) cacheRoots.Add(cacheRoot);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors++; }
+        }
+        AddProfiles(Path.Combine(local, "Google", "Chrome", "User Data"));
+        AddProfiles(Path.Combine(local, "Microsoft", "Edge", "User Data"));
+        AddProfiles(Path.Combine(local, "BraveSoftware", "Brave-Browser", "User Data"));
+        var firefoxProfiles = Path.Combine(local, "Mozilla", "Firefox", "Profiles");
+        if (Directory.Exists(firefoxProfiles))
+        {
+            try
+            {
+                foreach (var profile in Directory.EnumerateDirectories(firefoxProfiles, "*", new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint }))
+                {
+                    var entries = Path.Combine(profile, "cache2", "entries");
+                    if (Directory.Exists(entries)) cacheRoots.Add(entries);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors++; }
+        }
+        cacheRoots = cacheRoots.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var root in cacheRoots)
+        {
+            token.ThrowIfCancellationRequested(); pauseGate.Wait(token); locations++;
+            var offset = checkedFiles;
+            var nestedProgress = new InlineProgress<ScanInventoryProgress>(update =>
+                progress.Report(new(offset + update.Files, locations + update.Folders, "Browser cache · " + update.CurrentFolder)));
+            var (files, readErrors) = ReadFiles(root, token, nestedProgress, pauseGate);
+            errors += readErrors;
+            foreach (var row in files)
+            {
+                token.ThrowIfCancellationRequested(); pauseGate.Wait(token); checkedFiles++; row.ScanRoot = root;
+                if (RecycleBlockReason(row, root) is null) candidates.Add(row);
+                if (checkedFiles % 250 == 0) progress.Report(new(checkedFiles, locations, "Checking browser cache files"));
+            }
+        }
+        var tempRoot = Path.GetFullPath(Path.GetTempPath());
+        if (Directory.Exists(tempRoot))
+        {
+            locations++;
+            try
+            {
+                foreach (var path in Directory.EnumerateFiles(tempRoot, "*", new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint }))
+                {
+                    token.ThrowIfCancellationRequested(); pauseGate.Wait(token); checkedFiles++;
+                    try
+                    {
+                        var info = new FileInfo(path);
+                        var row = new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = info.Name, ScanRoot = tempRoot, Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension };
+                        if (IsRecognizedUserTempFile(row) && RecycleBlockReason(row, tempRoot) is null) candidates.Add(row);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
+                    if (checkedFiles % 250 == 0) progress.Report(new(checkedFiles, locations, "Checking older temporary files"));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
+        }
+        progress.Report(new(checkedFiles, locations, "Search complete"));
+        return new TemporaryFindResult(candidates, locations, errors);
     }
     private static (int Duplicates, int Errors) FindDuplicates(List<FileRow> files, CancellationToken token = default, IProgress<int>? progress = null, ManualResetEventSlim? pauseGate = null)
     {
@@ -488,6 +626,19 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { return false; }
     }
+    private static bool IsRecognizedUserTempFile(FileRow row)
+    {
+        try
+        {
+            var tempRoot = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+            var full = Path.GetFullPath(row.FullPath);
+            var extension = Path.GetExtension(full);
+            return Path.GetDirectoryName(full)?.Equals(tempRoot, StringComparison.OrdinalIgnoreCase) == true
+                && (extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase) || extension.Equals(".temp", StringComparison.OrdinalIgnoreCase))
+                && row.Modified.ToUniversalTime() <= DateTime.UtcNow.AddDays(-7);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { return false; }
+    }
     private void UpdateMarkedSummary()
     {
         if (ReviewCountText is null) return;
@@ -535,11 +686,10 @@ public partial class MainWindow : Window
             var volume = Path.GetPathRoot(full);
             if (string.IsNullOrWhiteSpace(volume) || volume.StartsWith("\\\\", StringComparison.Ordinal) || new DriveInfo(volume).DriveType != DriveType.Fixed) return "not on a local fixed drive with standard Recycle Bin recovery";
             var recognizedBrowserCache = IsRecognizedBrowserCacheFile(full);
-            var protectedParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Windows", "Windows.old", "WindowsApps", "Program Files", "Program Files (x86)", "ProgramData", "Recovery", "EFI", "Boot", "WinSxS", "Installer", "$Recycle.Bin", "System Volume Information" };
-            if (full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(protectedParts.Contains)) return "inside a protected Windows or app folder";
-            if (HasPathFolder(full, "AppData") && !recognizedBrowserCache) return "inside a protected app-data folder; only recognized browser cache files can be reviewed";
-            var protectedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".exe", ".dll", ".sys", ".drv", ".ocx", ".msi", ".msp", ".cab", ".cat", ".inf", ".bat", ".cmd", ".ps1", ".psm1", ".reg", ".lnk", ".scr", ".com" };
-            if (protectedTypes.Contains(Path.GetExtension(full))) return "an app, system, script, or shortcut file";
+            var recognizedUserTemp = IsRecognizedUserTempFile(row);
+            if (full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(ProtectedPathParts.Contains)) return "inside a protected Windows or app folder";
+            if (HasPathFolder(full, "AppData") && !recognizedBrowserCache && !recognizedUserTemp) return "inside a protected app-data folder; only recognized cache or older temporary files can be reviewed";
+            if (ProtectedFileTypes.Contains(Path.GetExtension(full))) return "an app, system, script, or shortcut file";
             var attributes = File.GetAttributes(full);
             if ((attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.System | FileAttributes.Hidden | FileAttributes.ReadOnly)) != 0) return "hidden, system, linked, read-only, or not a regular file";
             var info = new FileInfo(full);
@@ -555,13 +705,13 @@ public partial class MainWindow : Window
             .Select(group => $"• {group.Count():N0} {group.Key} (example: {Path.GetFileName(group.First().Row.FullPath)})"));
     private async void RecycleMarked_Click(object sender, RoutedEventArgs e)
     {
-        var marked = _rows.Where(r => r.Marked).ToList(); if (marked.Count == 0 || string.IsNullOrWhiteSpace(_selectedRoot)) return;
+        var marked = _rows.Where(r => r.Marked).ToList(); if (marked.Count == 0) return;
         StatusText.Text = $"Checking {marked.Count:N0} selected files…";
         ScanProgress.Visibility = Visibility.Visible; ScanProgress.IsIndeterminate = true;
         ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
         MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = false;
         List<(FileRow Row, string? Reason)> eligibility;
-        try { eligibility = await Task.Run(() => marked.Select(row => (Row: row, Reason: RecycleBlockReason(row, _selectedRoot))).ToList()); }
+        try { eligibility = await Task.Run(() => marked.Select(row => (Row: row, Reason: RecycleBlockReason(row, string.IsNullOrWhiteSpace(row.ScanRoot) ? _selectedRoot : row.ScanRoot))).ToList()); }
         catch (Exception ex)
         {
             StatusText.Text = "Could not check the selected files";
@@ -585,9 +735,11 @@ public partial class MainWindow : Window
         }
         var total = eligible.Sum(row => row.Size);
         var cacheOnly = eligible.All(row => IsRecognizedBrowserCacheFile(row.FullPath));
+        var oldTempOnly = eligible.All(IsRecognizedUserTempFile);
         var skipNote = blocked.Count > 0 ? $"\n\n{blocked.Count:N0} protected, changed, or unsupported file(s) will be skipped and stay selected:\n{DescribeBlockedItems(blocked)}" : "";
         var cacheNote = cacheOnly ? "\n\nThese are recognized temporary browser cache files only. Browser pages may reload or cache may be rebuilt. Cookies, history, saved passwords, and bookmarks are not included." : "";
-        var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var tempNote = oldTempOnly ? "\n\nThese are only .tmp/.temp files in your user Temp folder that have not changed for at least 7 days." : "";
+        var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}{tempNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) { StatusText.Text = "Cleanup canceled · no files changed"; return; }
         ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
         MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = SelectVisibleButton.IsEnabled = ClearSelectionButton.IsEnabled = false;
@@ -640,7 +792,7 @@ public partial class MainWindow : Window
             var row = eligible[index]; var name = Path.GetFileName(row.FullPath);
             try
             {
-                var changedReason = RecycleBlockReason(row, root);
+                var changedReason = RecycleBlockReason(row, string.IsNullOrWhiteSpace(row.ScanRoot) ? root : row.ScanRoot);
                 if (changedReason is not null)
                 {
                     skipped++;
@@ -706,6 +858,8 @@ public partial class MainWindow : Window
     }
 }
 public readonly record struct ScanInventoryProgress(int Files, int Folders, string CurrentFolder);
+public sealed record TemporaryFindResult(List<FileRow> Files, int Locations, int Errors);
+public sealed class InlineProgress<T>(Action<T> report) : IProgress<T> { public void Report(T value) => report(value); }
 public sealed record CleanupResult(List<FileRow> Moved, int Skipped, bool LogWarning, string? StoppedOn, bool Cancelled);
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
@@ -741,7 +895,7 @@ public sealed class FileRow : INotifyPropertyChanged
 {
     private bool _marked;
     private bool _duplicate;
-    public string Name { get; set; } = ""; public string FullPath { get; set; } = ""; public string RelativePath { get; set; } = ""; public string Type { get; set; } = ""; public long Size { get; set; } public DateTime Modified { get; set; }
+    public string Name { get; set; } = ""; public string FullPath { get; set; } = ""; public string RelativePath { get; set; } = ""; public string Type { get; set; } = ""; public string ScanRoot { get; set; } = ""; public long Size { get; set; } public DateTime Modified { get; set; }
     public bool Duplicate { get => _duplicate; set { if (_duplicate == value) return; _duplicate = value; PropertyChanged?.Invoke(this, new(nameof(Duplicate))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); } }
     public string DuplicateDisplay => Duplicate ? "Same content" : "—";
     public string SizeDisplay => Size < 0 ? "—" : Format(Size); public string ModifiedDisplay => Modified.ToString("yyyy-MM-dd HH:mm");

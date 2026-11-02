@@ -80,6 +80,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
                     <Button x:Name="FolderButton" Content="Choose a folder" Background="#087D86" Foreground="White" Padding="18,12" Click="ChooseFolder_Click"/>
+                    <Button x:Name="FindCachesButton" Content="Find temporary files" ToolTip="Find recognized browser caches and older temporary files in common locations" Background="#E7F5F2" Foreground="#087D86" Padding="18,9" Margin="0,7,0,0" Click="FindCaches_Click"/>
                     <Button x:Name="ScanButton" Content="Scan again" Background="#DDF4EF" Foreground="#087D86" Padding="18,9" Margin="0,7,0,0" Click="ScanAgain_Click"/>
                 </StackPanel>
             </Grid>
@@ -139,7 +140,7 @@
                         </UniformGrid>
                         <StackPanel Grid.Row="1" Margin="2,0,0,10">
                             <TextBlock Text="Start with a useful view" Foreground="#143E50" FontSize="17" FontWeight="Bold"/>
-                            <TextBlock Text="Pick a question. TidyCircuit filters your scan and shows the matching files." Foreground="#688086" FontSize="12" Margin="0,3,0,0"/>
+                        <TextBlock Text="Pick a folder or find temporary files in common locations. Review every result before cleanup." Foreground="#688086" FontSize="12" Margin="0,3,0,0"/>
                         </StackPanel>
                         <UniformGrid Grid.Row="2" Columns="2" Rows="2" VerticalAlignment="Top">
                             <Button Style="{StaticResource QuickCard}" Tag="largest files" Click="QuickQuery_Click"><StackPanel>
@@ -234,7 +235,7 @@
                     </Grid>
                 </TabItem>
             </TabControl>
-            <TextBlock Grid.Row="3" Text="Selected-folder scan · no cloud model · Windows folders and app files are protected from cleanup" Foreground="#829498" FontSize="10" Margin="3,9,0,0"/>
+            <TextBlock Grid.Row="3" Text="Local rules only · no uploads · Windows folders and app files stay protected" Foreground="#829498" FontSize="10" Margin="3,9,0,0"/>
         </Grid>
     </Grid>
 </Window>
