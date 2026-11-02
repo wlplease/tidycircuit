@@ -38,7 +38,7 @@ public partial class MainWindow : Window
             FileCountText.Text = files.Count.ToString("N0"); FolderSizeText.Text = Format(files.Sum(f => f.Size));
             var dupes = await Task.Run(() => FindDuplicates(files));
             DuplicatesText.Text = dupes.ToString("N0");
-            StatusText.Text = $"Scan complete · {files.Count:N0} files · same-content duplicates verified";
+            StatusText.Text = $"Scan complete · {files.Count:N0} files · duplicates checked by content; files over 256 MB skipped";
         }
         catch (Exception ex) { StatusText.Text = "Scan stopped · " + ex.Message; }
         finally { ScanProgress.IsIndeterminate = false; ScanButton.IsEnabled = FolderButton.IsEnabled = true; }
