@@ -8,5 +8,7 @@ Thanks for helping TidyCircuit feel clear and safe. Open an issue before large c
 - Do not add automatic cleanup of Downloads, personal documents, browser profiles, cloud placeholders, or system directories.
 - Keep the static site usable without an account or build step.
 - Document new features and limitations in the README.
+- Keep the privacy page, security policy, and product disclaimer accurate when changing data flows, cleanup behavior, or release packaging.
+- Do not describe the app as antivirus, a complete PC cleaner, or a security guarantee.
 
 For security issues, follow [SECURITY.md](SECURITY.md).
