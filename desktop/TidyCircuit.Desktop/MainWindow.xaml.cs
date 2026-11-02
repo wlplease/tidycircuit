@@ -25,13 +25,21 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); FilesGrid.ItemsSource = _rows;
         FilesGrid.Sorting += (_, e) => { e.Handled = true; SortRows(); };
+        MainTabs.SelectionChanged += (_, _) => SetActiveNavigation();
+        SetActiveNavigation();
     }
     private async void ChooseFolder_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFolderDialog { Title = "Choose one folder for a read-only scan", Multiselect = false };
         if (dialog.ShowDialog(this) != true) return;
         _selectedRoot = dialog.FolderName;
+        SelectedRootText.Text = _selectedRoot;
         await ScanFolderAsync(_selectedRoot);
+    }
+    private async void ScanAgain_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedRoot)) await ScanFolderAsync(_selectedRoot);
+        else ChooseFolder_Click(sender, e);
     }
     private async Task ScanFolderAsync(string root)
     {
@@ -156,6 +164,38 @@ public partial class MainWindow : Window
         AskBox.Text = query; ApplySmartQuery();
     }
     private void Ask_Click(object sender, RoutedEventArgs e) => ApplySmartQuery();
+    private void Navigate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string index } && int.TryParse(index, out var tabIndex)) MainTabs.SelectedIndex = tabIndex;
+        SetActiveNavigation();
+    }
+    private void SetActiveNavigation()
+    {
+        if (OverviewNavButton is null) return;
+        var buttons = new[] { OverviewNavButton, SmartFindNavButton, ReviewFilesNavButton };
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var active = MainTabs.SelectedIndex == i;
+            buttons[i].Background = active
+                ? (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#DDF4EF")!
+                : System.Windows.Media.Brushes.Transparent;
+            buttons[i].Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(active ? "#087D86" : "#45616A")!;
+        }
+    }
+    private void QuickQuery_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string query }) return;
+        MainTabs.SelectedIndex = 1;
+        SetActiveNavigation();
+        AskBox.Text = query;
+        if (_rows.Count == 0)
+        {
+            _assistantSummary = "Choose a folder first. Then this question will search that scan locally.";
+            ApplyCurrentFilters(); return;
+        }
+        ApplySmartQuery();
+    }
+    private void ReviewMatches_Click(object sender, RoutedEventArgs e) { MainTabs.SelectedIndex = 2; SetActiveNavigation(); }
     private void ApplySmartQuery()
     {
         var query = AskBox.Text.Trim();
@@ -222,9 +262,11 @@ public partial class MainWindow : Window
     {
         if (ReviewCountText is null) return;
         var marked = _rows.Count(row => row.Marked);
-        ReviewCountText.Text = $"{FilesGrid.Items.Count:N0} shown · {marked:N0} marked";
+        ReviewCountText.Text = $"{FilesGrid.Items.Count:N0} shown · {marked:N0} selected";
+        if (OverviewMarkedText is not null) OverviewMarkedText.Text = marked.ToString("N0");
         if (RecycleButton is not null) RecycleButton.IsEnabled = marked > 0;
     }
+    private void SelectAll_Click(object sender, RoutedEventArgs e) { foreach (var row in _rows) row.Marked = true; UpdateMarkedSummary(); }
     private void MarkVisible_Click(object sender, RoutedEventArgs e) { foreach (var row in FilesGrid.Items.OfType<FileRow>()) row.Marked = true; UpdateMarkedSummary(); }
     private void ClearMarks_Click(object sender, RoutedEventArgs e) { foreach (var row in _rows) row.Marked = false; UpdateMarkedSummary(); }
     private static string OperationLogPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyCircuit", "operations.jsonl");
