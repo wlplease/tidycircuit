@@ -3,3 +3,6 @@
 .edge-shot/
 node_modules/
 report.json
+/releases/
+desktop/**/bin/
+desktop/**/obj/

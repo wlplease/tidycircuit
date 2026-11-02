@@ -1,52 +1,32 @@
 # TidyCircuit
 
-![TidyCircuit logo](assets/wordmark.svg)
+**Make room. Keep control.** TidyCircuit is a Windows desktop file review app with a private, read-only scan.
 
-**A clearer view of your PC. A calmer way to clean.** TidyCircuit is a free, open-source PC care project with a coastal, sea-glass look. It helps you inspect files, understand your Windows system, and make deliberate cleanup decisions.
+[Download TidyCircuit for Windows](https://github.com/wlplease/CleanMeScarlett/releases/latest/download/TidyCircuit-0.1.0-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/CleanMeScarlett)
 
-![Coastal TidyCircuit banner](assets/coastal-banner.svg)
+## Early access 0.1.0
 
-![TidyCircuit desktop dashboard](assets/dashboard-desktop.png)
+- Choose a folder and see file count, total size, full paths, and modified dates.
+- Search and sort files; mark items and export a TSV review list.
+- Verify duplicates using SHA-256 after matching file size. Files above 256 MB are skipped.
+- Run on Windows 10 or 11, x64. The ZIP contains a self-contained executable; no .NET install is required.
 
-<details><summary>Mobile dashboard</summary>
+The app only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. Use Windows Security for threat scans. It skips inaccessible and linked folders. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
 
-![TidyCircuit mobile dashboard](assets/dashboard-mobile.png)
+## Install
 
-</details>
+1. Download and unzip `TidyCircuit-0.1.0-win-x64.zip`.
+2. Run `TidyCircuit.exe`.
+3. Choose a folder. Scanning begins immediately and shows status in the app.
 
-## Use it now
+## Build from source
 
-Open `index.html` in Edge or Chrome, or visit the [live demo](https://wlplease.github.io/CleanMeScarlett/) once deployed. Choose **Analyze a folder**. File names and contents stay in your browser; the site does not upload them.
-
-| Feature | Today |
-| --- | --- |
-| Folder review | Search, filter by extension or folder, sort by size, name, or age; see paths and dates. |
-| Duplicate verification | SHA-256 compares same-size files locally. Files over 256 MB or unreadable files are skipped and labeled. No automatic deletion. |
-| Review list | Mark files, see the total, and export a TSV for manual follow-up. |
-| Organization ideas | Extension groups for the selected folder; no automatic moves. |
-| Windows companion | Export actual drive, RAM, battery charge, Microsoft Defender status when available, and a tightly scoped user TEMP inventory to a JSON report. |
-| Malware check | Ask Microsoft Defender to scan one chosen user file; Windows Security owns findings and any quarantine. |
-| Recoverable cleanup | Explicitly move one eligible old `.tmp` or `.log` user TEMP file to local quarantine, log it, and restore by operation ID. |
-
-The browser cannot see whole-drive usage, live RAM, battery health, or system caches on its own. Its file picker requires you to select a folder. For Windows data and scoped cleanup, see the [companion guide](companion/README.md). The companion is source code, not a signed public installer.
+```powershell
+dotnet publish desktop/TidyCircuit.Desktop/TidyCircuit.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o releases/win-x64
+```
 
 ## Safety and privacy
 
-- No account, telemetry, file upload, background scan, or automatic deletion.
-- TidyCircuit does not identify viruses. Windows Security or the installed antivirus owns malware detection and actions.
-- Never remove Microsoft, Windows, driver, browser, or application files based on size or duplicate status.
-- A matching hash verifies identical file contents for files that were successfully checked; it does not mean either copy is safe to remove.
-- The companion only inventories current-user TEMP files older than the selected age. Quarantine requires an exact path and confirmation. Restore is available while the quarantined file remains.
-- Windows Storage Sense handles OS temporary files and update cleanup. TidyCircuit links to [Microsoft's Storage Sense guidance](https://learn.microsoft.com/windows/configuration/storage/storage-sense) instead of editing system cache folders directly.
+Scans remain on the PC. Duplicate hashes are calculated locally; paths and hashes are not uploaded. A duplicate is only a review clue; it is not permission to delete either copy. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the [MIT license](LICENSE).
 
-## Project files
-
-- [Brand guide](BRAND.md) — color palette, logo, and voice
-- [Windows companion](companion/README.md) — report, plan, quarantine, restore
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT license](LICENSE)
-
-## Hosting and name
-
-This is a static front end suitable for a static host. Vercel Hobby has [personal, non-commercial terms](https://vercel.com/docs/plans/hobby); review the terms for your use.
-
-**TidyCircuit remains a working name.** A basic web search found no obvious exact-name software match, but that is not US trademark clearance or proof a domain is available. Follow the [USPTO clearance guidance](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks), including similar marks and existing commercial use, before registering the name or committing to a public product launch.
+The app is free during early access. Future paid features may be considered; no payment is required for this release.
