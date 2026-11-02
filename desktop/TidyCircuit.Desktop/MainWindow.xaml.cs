@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private Func<FileRow, bool> _smartFilter = _ => true;
     private CancellationTokenSource? _scanCancellation;
     private CancellationTokenSource? _filterCancellation;
+    private CancellationTokenSource? _cleanupCancellation;
     private readonly ManualResetEventSlim _scanPauseGate = new(true);
     private readonly ManualResetEventSlim _filterPauseGate = new(true);
     private bool _isUpdatingMarks;
@@ -43,6 +44,7 @@ public partial class MainWindow : Window
             _searchDebounce.Stop();
             _scanCancellation?.Cancel(); _scanPauseGate.Set();
             _filterCancellation?.Cancel(); _filterPauseGate.Set();
+            _cleanupCancellation?.Cancel();
         };
         SetActiveNavigation();
     }
@@ -122,7 +124,11 @@ public partial class MainWindow : Window
         if (_scanPaused) { _scanPauseGate.Reset(); PauseScanButton.Content = "Resume"; ProgressText.Text = "Scan paused · resume to continue"; }
         else { _scanPauseGate.Set(); PauseScanButton.Content = "Pause"; ProgressText.Text = "Resuming scan…"; }
     }
-    private void CancelScan_Click(object sender, RoutedEventArgs e) { _scanCancellation?.Cancel(); _scanPauseGate.Set(); ProgressText.Text = "Stopping scan…"; }
+    private void CancelScan_Click(object sender, RoutedEventArgs e)
+    {
+        if (_cleanupCancellation is not null) { _cleanupCancellation.Cancel(); ProgressText.Text = "Stopping cleanup…"; return; }
+        _scanCancellation?.Cancel(); _scanPauseGate.Set(); ProgressText.Text = "Stopping scan…";
+    }
     private static (List<FileRow> Files, int Errors) ReadFiles(string root, CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate)
     {
         var files = new List<FileRow>(); var errors = 0; var folders = 0; var currentFolder = root;
@@ -580,54 +586,83 @@ public partial class MainWindow : Window
         var skipNote = blocked.Count > 0 ? $"\n\n{blocked.Count:N0} protected, changed, or unsupported file(s) will be skipped and stay selected:\n{DescribeBlockedItems(blocked)}" : "";
         var cacheNote = cacheOnly ? "\n\nThese are recognized temporary browser cache files only. Browser pages may reload or cache may be rebuilt. Cookies, history, saved passwords, and bookmarks are not included." : "";
         var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (answer != MessageBoxResult.Yes) return;
-        ScanButton.IsEnabled = FolderButton.IsEnabled = false;
-        var moved = new List<FileRow>();
-        var skippedDuringAction = 0;
-        var logWarning = false;
+        if (answer != MessageBoxResult.Yes) { StatusText.Text = "Cleanup canceled · no files changed"; return; }
+        ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
+        PauseScanButton.Visibility = Visibility.Collapsed;
+        CancelScanButton.Content = "Cancel cleanup"; CancelScanButton.IsEnabled = true; CancelScanButton.Visibility = Visibility.Visible;
+        ScanProgress.Visibility = Visibility.Visible; ScanProgress.IsIndeterminate = false; ScanProgress.Maximum = eligible.Count; ScanProgress.Value = 0;
+        StatusText.Text = "Moving selected files to the Recycle Bin";
+        _cleanupCancellation = new CancellationTokenSource();
+        var cleanupToken = _cleanupCancellation.Token;
+        var cleanupProgress = new Progress<(int Done, int Total, string Name)>(update =>
+        {
+            ProgressText.Text = $"Moving {update.Done:N0} of {update.Total:N0} · {update.Name}";
+            ScanProgress.Value = update.Done;
+        });
         try
         {
-            foreach (var row in eligible)
+            var result = await Task.Run(() => RecycleEligibleFiles(eligible, _selectedRoot, cleanupToken, cleanupProgress));
+            _rows.RemoveRange(result.Moved);
+            FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_rows.Sum(r => r.Size));
+            var (duplicates, errors) = await Task.Run(() => FindDuplicates(_rows.ToList())); DuplicatesText.Text = duplicates.ToString("N0");
+            await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
+            var skipped = blocked.Count + result.Skipped;
+            StatusText.Text = $"Moved {result.Moved.Count:N0} file(s) · {skipped:N0} skipped and remain selected · {(errors > 0 ? $"{errors} file(s) could not be rechecked" : result.LogWarning ? "check operation log status" : "operation logged locally")}";
+            if (!string.IsNullOrWhiteSpace(result.StoppedOn))
+                MessageBox.Show($"Cleanup stopped after handling {result.Moved.Count:N0} file(s). Could not move {result.StoppedOn}.\n\nCheck the Recycle Bin for files already moved.", "Cleanup stopped", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else if (result.Cancelled)
+                StatusText.Text = $"Cleanup canceled · moved {result.Moved.Count:N0} file(s) · remaining files were not changed";
+        }
+        finally
+        {
+            _cleanupCancellation?.Dispose(); _cleanupCancellation = null;
+            CancelScanButton.Content = "Cancel"; CancelScanButton.IsEnabled = false; CancelScanButton.Visibility = Visibility.Collapsed;
+            ScanProgress.IsIndeterminate = false; ScanProgress.Visibility = Visibility.Collapsed; ScanProgress.Maximum = 100; ScanProgress.Value = 0;
+            ScanButton.IsEnabled = FolderButton.IsEnabled = true;
+            UpdateMarkedSummary();
+        }
+    }
+    private static CleanupResult RecycleEligibleFiles(List<FileRow> eligible, string root, CancellationToken token, IProgress<(int Done, int Total, string Name)> progress)
+    {
+        var moved = new List<FileRow>(); var skipped = 0; var logWarning = false; string? stoppedOn = null;
+        for (var index = 0; index < eligible.Count; index++)
+        {
+            if (token.IsCancellationRequested) break;
+            var row = eligible[index]; var name = Path.GetFileName(row.FullPath);
+            try
             {
-                try
+                var changedReason = RecycleBlockReason(row, root);
+                if (changedReason is not null)
                 {
-                    var changedReason = RecycleBlockReason(row, _selectedRoot);
-                    if (changedReason is not null)
-                    {
-                        skippedDuringAction++;
-                        try { WriteOperation("recycle", row, "skipped: " + changedReason); } catch { logWarning = true; }
-                        continue;
-                    }
+                    skipped++;
+                    try { WriteOperation("recycle", row, "skipped: " + changedReason); } catch { logWarning = true; }
+                }
+                else
+                {
                     WriteOperation("recycle", row, "requested");
                     FileSystem.DeleteFile(row.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
                     moved.Add(row);
                     try { WriteOperation("recycle", row, "moved"); } catch { logWarning = true; }
                 }
-                catch (IOException)
-                {
-                    skippedDuringAction++;
-                    try { WriteOperation("recycle", row, "skipped: file unavailable or in use"); } catch { logWarning = true; }
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    skippedDuringAction++;
-                    try { WriteOperation("recycle", row, "skipped: access denied"); } catch { logWarning = true; }
-                }
-                catch (Exception ex)
-                {
-                    try { WriteOperation("recycle", row, "failed: " + ex.GetType().Name); } catch { logWarning = true; }
-                    MessageBox.Show($"Stopped after handling {moved.Count} file(s). Could not move {Path.GetFileName(row.FullPath)}. {ex.Message}\n\nCheck the Recycle Bin for any files already moved.", "Cleanup stopped", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    break;
-                }
             }
-            _rows.RemoveRange(moved);
-            FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_rows.Sum(r => r.Size));
-            var (duplicates, errors) = await Task.Run(() => FindDuplicates(_rows.ToList())); DuplicatesText.Text = duplicates.ToString("N0");
-            await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
-            var skipped = blocked.Count + skippedDuringAction;
-            StatusText.Text = $"Moved {moved.Count:N0} file(s) · {skipped:N0} skipped and remain selected · {(errors > 0 ? $"{errors} file(s) could not be rechecked" : logWarning ? "check operation log status" : "operation logged locally")}";
+            catch (IOException)
+            {
+                skipped++;
+                try { WriteOperation("recycle", row, "skipped: file unavailable or in use"); } catch { logWarning = true; }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                skipped++;
+                try { WriteOperation("recycle", row, "skipped: access denied"); } catch { logWarning = true; }
+            }
+            catch (Exception ex)
+            {
+                try { WriteOperation("recycle", row, "failed: " + ex.GetType().Name); } catch { logWarning = true; }
+                stoppedOn = name; break;
+            }
+            if ((index + 1) % 25 == 0 || index + 1 == eligible.Count) progress.Report((index + 1, eligible.Count, name));
         }
-        finally { ScanButton.IsEnabled = FolderButton.IsEnabled = true; }
+        return new CleanupResult(moved, skipped, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
     }
     private static string TsvField(string value)
     {
@@ -662,6 +697,7 @@ public partial class MainWindow : Window
     }
 }
 public readonly record struct ScanInventoryProgress(int Files, int Folders, string CurrentFolder);
+public sealed record CleanupResult(List<FileRow> Moved, int Skipped, bool LogWarning, string? StoppedOn, bool Cancelled);
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
     public void ReplaceAll(IEnumerable<T> items)
