@@ -4,7 +4,7 @@ Last updated: November 1, 2026.
 
 ## Desktop app
 
-The public TidyCircuit 0.1.1 Windows build scans only the folder you choose. Newer cleanup features on the unreleased `main` source are described separately below.
+The 0.2.0 release candidate scans only folders you choose, plus explicitly requested recognized cache/temp locations. It is still an unsigned prerelease.
 
 ## What the app reads
 
@@ -14,11 +14,11 @@ The public TidyCircuit 0.1.1 Windows build scans only the folder you choose. New
 
 ## What stays on your PC
 
-The scan list, file paths, file contents used for hashing, and hashes remain in the app process. The desktop app does not upload scan data, create an account, or include analytics. The public 0.1.1 app does not move or delete files. Exported review TSVs are saved only where you choose.
+The scan list, file paths, file contents used for hashing, and hashes remain on the PC. The app does not upload scan data, create an account, or include analytics. Exported review TSVs are saved only where you choose. The read-only system snapshot reads Windows memory, power, and local drive APIs on request; no values are transmitted.
 
-The unreleased `main` source includes local rule-based search over the chosen folder and a one-click search of recognized Chrome, Edge, Brave, and Firefox cache folders plus direct `.tmp` and `.temp` files in the current user's Temp folder that are at least seven days old. For the one-click results, only visible, regular, unchanged files matching those rules can be moved; for a folder scan, other selected personal files may also be eligible. Every move requires confirmation. It does not clear Windows caches or arbitrary app caches. Browser cookies, history, passwords, and bookmarks are excluded. The search uses local rules; it does not include an AI model or send file information over the network. For recycle operations it writes the time, full file paths, byte counts, and outcomes to `%LOCALAPPDATA%\TidyCircuit\operations.jsonl`. This local log may expose private file names and paths to anyone who can access your Windows account. Deleting the app folder does not remove the log. Recycle Bin recovery depends on Windows/drive settings; verify items appear there before relying on recovery.
+The local rule-based finder checks recognized Chrome, Edge, Brave, and Firefox cache folders plus direct `.tmp` and `.temp` files in the current user's Temp folder that are at least seven days old. Only visible, regular, unchanged files matching those rules can be moved from a cache/temp search. A selected-folder scan can include other personal files. Before each move, the app checks paths and file attributes, skips protected or changed files, and requires confirmation. It does not clear Windows caches or arbitrary app caches. Browser cookies, history, passwords, and bookmarks are excluded. Search uses local rules; it does not include an AI model or send file information over the network. The optional organize action moves selected files to suggested type folders only after confirmation and keeps an Undo record. For recycle operations it writes time, full paths, byte counts, and outcomes to `%LOCALAPPDATA%\TidyCircuit\operations.jsonl`; organization undo paths are stored under `%LOCALAPPDATA%\TidyCircuit\organization-undo.json`. These records may expose private file names and paths to anyone with access to your Windows account. Deleting the app folder does not remove them. Recycle Bin recovery depends on Windows/drive settings; verify items appear there before relying on recovery.
 
-TidyCircuit does not scan the whole PC, clean Windows or general app caches, report system health, or detect malware. The Safety screen can open Windows Security, but it does not perform or report a Defender scan. Use Windows Security to start a malware scan.
+TidyCircuit does not scan the whole PC, clean Windows or general app caches, or detect malware. Its read-only system snapshot displays RAM, battery, and fixed-drive details reported by Windows; it is not a diagnostic or health assessment. The app can open Windows Security, but it does not perform or report a Defender scan. Use Windows Security to start a malware scan.
 
 ## Website
 

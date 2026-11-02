@@ -1,36 +1,41 @@
 # TidyCircuit
 
-**Make room. Keep control.** TidyCircuit is a private Windows file review app. The public 0.1.1 download is read-only; newer local smart-review and recoverable cleanup work on `main` is not in that download yet.
+<p align="center"><img src="assets/coastal-banner.svg" alt="TidyCircuit coastal sailboat branding" width="900"></p>
 
-[Download TidyCircuit for Windows](https://github.com/wlplease/tidycircuit/releases/latest/download/TidyCircuit-0.1.1-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Disclaimer](DISCLAIMER.md) · [Security](SECURITY.md) · [Install/uninstall](INSTALL.md) · [Report a bug](https://github.com/wlplease/tidycircuit/issues/new)
+**Make room. Keep control.** TidyCircuit is a local Windows file review and organization app. It helps people understand a chosen folder, identify exact duplicates, and make deliberate, recoverable changes.
 
-## Early access 0.1.1
+[Download 0.2.0 Release Candidate (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.1/TidyCircuit-0.2.0-rc.1-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
 
-- Choose a folder and see file count, total size, full paths, and modified dates.
-- Search and sort files; mark items and export a TSV review list.
-- Verify duplicates using SHA-256 after matching file size. Files above 256 MB are skipped.
-- Run on Windows 10 or 11, x64. The ZIP contains a self-contained executable; no .NET install is required.
+## What it does
 
-The 0.1.1 download only reads the selected folder. It does not move or delete files, find caches automatically, or detect malware. The unreleased `main` source adds a local rule-based finder, background search for large inventories, and a manually confirmed Recycle Bin action with protected paths and a local operation log. Verified duplicate groups label one path as a keep candidate and the other exact copies as extras; a separate control selects only the visible extras, and nothing is selected automatically. Its one-click temporary-file search checks recognized Chrome, Edge, Brave, and Firefox cache folders plus direct `.tmp` and `.temp` files in the current user's Temp folder that are at least seven days old. It does not clear Windows or arbitrary app caches. Browser cookies, history, passwords, and bookmarks are excluded. The app does not include a language model or upload scan data. Use Windows Security for malware scans. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
+- Scans a folder you select, shows files as they are found, and reports progress. Large scans can pause, resume, or stop while keeping partial results.
+- Filters and sorts by size, age, type, path, duplicate status, and folder. Select all applies only to the results currently shown. Exports a local TSV review list.
+- Groups same-size candidates first. Only after you ask, compares files up to 256 MB with local SHA-256 and labels exact matches; hashes and paths stay on your PC.
+- Finds recognized browser cache files and older `.tmp` / `.temp` files in the current user's Temp directory. It does not clear Windows or arbitrary app caches.
+- Offers a manually approved file organization preview, skips conflicts and protected paths, and records moves for an Undo attempt.
+- Offers a read-only Windows snapshot for available RAM, battery, and fixed-drive details.
+- Sends malware questions to Windows Security / Microsoft Defender. TidyCircuit does not scan for or diagnose malware.
 
-## Install
+Cleanup is manual. Before a Recycle Bin action, the app rechecks eligibility and shows the file count, space, exclusions, and recovery caveat for confirmation. It blocks system/app locations, linked paths, hidden/system/read-only files, unsupported drives, and files changed since scanning. Recycle Bin recovery depends on Windows and drive settings. Review carefully and keep independent backups.
 
-See the step-by-step [install and uninstall guide](INSTALL.md).
+## Release candidate status
+
+This is an **unsigned 0.2.0 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. This release candidate has been exercised on the project PC with disposable files. A separate clean-PC installation test is still pending; do not treat it as a production release.
+
+## Install and uninstall
+
+Extract the ZIP to a folder you own, run `TidyCircuit.exe`, and choose a folder to review. It does not install a Windows service, startup entry, or scheduled task. To uninstall, close the app and remove the extracted app folder. Local operation and organization logs remain under `%LOCALAPPDATA%\TidyCircuit`; exported reports remain wherever you saved them. See [INSTALL.md](INSTALL.md) for the full steps.
 
 ## Build from source
+
+Requires the .NET 10 SDK and Windows desktop targeting packs:
 
 ```powershell
 dotnet publish desktop/TidyCircuit.Desktop/TidyCircuit.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o releases/win-x64
 ```
 
-Building from source requires the .NET 10 SDK.
+## Privacy, support, and license
 
-## Safety and privacy
+The desktop app does not upload file lists, file contents, or hashes and does not include cloud AI. The website cannot access your files. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), [DISCLAIMER.md](DISCLAIMER.md), and [LICENSE](LICENSE). Report bugs through [GitHub Issues](https://github.com/wlplease/tidycircuit/issues/new); do not attach private file lists.
 
-Scans remain on the PC. Duplicate hashes are calculated locally; paths and hashes are not uploaded. A duplicate or old/large-file suggestion is only a review clue; TidyCircuit cannot decide that a personal file is safe to remove. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the [MIT license](LICENSE).
-
-The app is free during early access through **December 12, 2026 at 12:12 UTC**. Existing copies remain usable after the offer ends. The website will pause new free downloads while paid access is prepared. The current GitHub release asset is public and cannot be revoked from people who already have its direct link; checkout and license enforcement are not implemented yet.
-
-## Legal and security notes
-
-TidyCircuit is provided under the MIT License. Read the [product disclaimer](DISCLAIMER.md) for cleanup limits, warranty context, and third-party service notes. Neither open source nor a checksum proves a release is safe or guarantees a result. Current Windows builds are unsigned. See the [security policy](SECURITY.md) for vulnerability reporting and project security status. The landing page includes Vercel Web Analytics; its collection depends on the deployed project's setting. See [PRIVACY.md](PRIVACY.md) for the desktop/site distinction.
+TidyCircuit is free for early access through **December 12, 2026 at 12:12 UTC**. Existing copies remain usable after that date. The source is MIT-licensed; no payment or license enforcement is currently implemented.

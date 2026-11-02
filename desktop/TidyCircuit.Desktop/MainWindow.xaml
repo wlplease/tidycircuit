@@ -1,7 +1,7 @@
 <Window x:Class="TidyCircuit.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TidyCircuit" Height="850" Width="1360" MinHeight="740" MinWidth="1120"
+        Title="TidyCircuit 0.2.0-rc.1 · UNSIGNED CANDIDATE" Height="850" Width="1360" MinHeight="740" MinWidth="1120"
         Background="#F3F8F6" WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <SolidColorBrush x:Key="Navy" Color="#143E50"/>
@@ -58,7 +58,7 @@
                     <Button x:Name="ReviewFilesNavButton" Style="{StaticResource NavButton}" Content="▤   Review files" Tag="2" Click="Navigate_Click"/>
                     <Button x:Name="GuideNavButton" Style="{StaticResource NavButton}" Content="✦   Guide chat" Tag="3" Click="Navigate_Click"/>
                     <TextBlock Text="WINDOWS TOOLS" Foreground="#829498" FontSize="9" FontWeight="Bold" Margin="5,24,0,8"/>
-                    <Button Style="{StaticResource NavButton}" Content="◉   System details" Click="System_Click"/>
+                    <Button x:Name="SystemNavButton" Style="{StaticResource NavButton}" Content="◉   System details" Tag="4" Click="Navigate_Click"/>
                     <Button Style="{StaticResource NavButton}" Content="◇   Windows Security" Click="Safety_Click"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,3">
@@ -66,7 +66,7 @@
                         <TextBlock Text="ON THIS PC" Foreground="#087D86" FontSize="9" FontWeight="Bold"/>
                         <TextBlock Text="Your scan stays private. You decide what changes." TextWrapping="Wrap" Foreground="#527078" FontSize="11" Margin="0,5,0,0"/>
                     </StackPanel></Border>
-                    <TextBlock Text="TIDYCIRCUIT · EARLY ACCESS" Foreground="#8EA1A0" FontSize="8" Margin="2,12,0,0"/>
+                    <TextBlock Text="0.2.0-RC.1 · UNSIGNED TEST BUILD" Foreground="#8EA1A0" FontSize="8" Margin="2,12,0,0"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -208,18 +208,22 @@
                         </Grid>
                         <Border Grid.Row="1" Background="White" CornerRadius="12" Padding="10" Margin="0,0,0,10">
                             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox x:Name="SearchBox" Height="36" Padding="10,8" BorderBrush="#D6E6E5" ToolTip="Search file names, folders, extensions, or any part of a path" Text="Search names, folders, extensions…" Foreground="#829498" GotKeyboardFocus="SearchBox_GotKeyboardFocus" LostKeyboardFocus="SearchBox_LostKeyboardFocus" TextChanged="SearchBox_TextChanged"/>
                                     <ComboBox x:Name="SortBox" Grid.Column="1" Width="146" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="SortBox_SelectionChanged"><ComboBoxItem Content="Largest first"/><ComboBoxItem Content="Name A–Z"/><ComboBoxItem Content="Oldest first"/></ComboBox>
-                                    <Button x:Name="SelectAllButton" Grid.Column="2" Content="Select all" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
-                                    <Button x:Name="SelectVisibleButton" Grid.Column="3" Content="Select visible" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="MarkVisible_Click"/>
-                                    <Button x:Name="ClearSelectionButton" Grid.Column="4" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
+                                    <ComboBox x:Name="ViewFilterBox" Grid.Column="2" Width="145" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="ViewFilterBox_SelectionChanged"><ComboBoxItem Content="All files"/><ComboBoxItem Content="Large · 100 MB+"/><ComboBoxItem Content="Older · 6 months+"/><ComboBoxItem Content="Duplicates · verified"/><ComboBoxItem Content="Same-size candidates"/><ComboBoxItem Content="Temporary files"/></ComboBox>
+                                    <ComboBox x:Name="FolderFilterBox" Grid.Column="3" Width="150" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="FolderFilterBox_SelectionChanged"><ComboBoxItem Content="All folders"/></ComboBox>
+                                    <Button x:Name="SelectAllButton" Grid.Column="4" Content="Select all shown" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
+                                    <Button x:Name="ClearSelectionButton" Grid.Column="5" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
                                 </Grid>
-                                <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Select all covers the scan. Select visible replaces selection with the shown results." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
+                                <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Selection covers only the current filtered results. Every move is checked and confirmed." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
                                     <Button x:Name="SelectVisibleExtrasButton" IsEnabled="False" Grid.Column="1" Content="Select visible extras" ToolTip="Select only verified extra copies shown in this view; nothing is moved" Background="#FFF4E9" Foreground="#8B5D32" Padding="12,8" Margin="0,0,7,0" Click="SelectVisibleExtras_Click"/>
-                                    <Button Grid.Column="2" Content="Export selected" Background="#143E50" Foreground="White" Padding="13,8" Margin="0,0,7,0" Click="Export_Click"/>
-                                    <Button x:Name="RecycleButton" IsEnabled="False" Grid.Column="3" Content="Move selected to Recycle Bin" Background="#FBECE7" Foreground="#9B4D3B" Padding="13,8" Click="RecycleMarked_Click"/>
+                                    <Button x:Name="VerifyDuplicatesButton" IsEnabled="False" Grid.Column="2" Content="Verify same-size" Background="#E7F5F2" Foreground="#087D86" Padding="12,8" Margin="0,0,7,0" Click="VerifyDuplicates_Click"/>
+                                    <Button x:Name="UndoOrganizationButton" IsEnabled="False" Grid.Column="3" Content="Undo organize" Background="Transparent" Foreground="#45616A" Padding="10,8" Margin="0,0,7,0" Click="UndoOrganization_Click"/>
+                                    <Button Grid.Column="4" Content="Organize preview" Background="#FFF4E9" Foreground="#8B5D32" Padding="13,8" Margin="0,0,7,0" Click="OrganizePreview_Click"/>
+                                    <Button Grid.Column="5" Content="Export selected" Background="#143E50" Foreground="White" Padding="13,8" Margin="0,0,7,0" Click="Export_Click"/>
+                                    <Button x:Name="RecycleButton" IsEnabled="False" Grid.Column="6" Content="Move to Recycle Bin" Background="#FBECE7" Foreground="#9B4D3B" Padding="13,8" Click="RecycleMarked_Click"/>
                                 </Grid>
                             </Grid>
                         </Border>
@@ -264,8 +268,25 @@
                         </Grid>
                     </Grid>
                 </TabItem>
+                <TabItem Header="System details">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="8,8,8,20">
+                        <Border Background="#E7F5F2" CornerRadius="14" Padding="22" Margin="0,0,0,14"><StackPanel>
+                            <TextBlock Text="READ-ONLY WINDOWS SNAPSHOT" Foreground="#087D86" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="Your PC at a glance" Foreground="#143E50" FontSize="25" FontWeight="SemiBold" Margin="0,5,0,0"/>
+                            <TextBlock Text="Values come from Windows and refresh on request. TidyCircuit does not tune settings or close apps." Foreground="#688086" FontSize="12" Margin="0,4,0,0"/>
+                            <Button Content="Refresh details" HorizontalAlignment="Left" Background="#087D86" Foreground="White" Margin="0,12,0,0" Click="RefreshSystem_Click"/>
+                        </StackPanel></Border>
+                        <UniformGrid Columns="3" Rows="2" Margin="0,0,0,10">
+                            <Border Background="White" CornerRadius="12" Padding="18" Margin="0,0,7,7"><StackPanel><TextBlock Text="MEMORY IN USE" Foreground="#829498" FontSize="9" FontWeight="Bold"/><TextBlock x:Name="MemoryStatusText" Text="Refresh to read" Foreground="#143E50" FontSize="21" FontWeight="SemiBold" Margin="0,8,0,0"/><TextBlock x:Name="MemoryDetailText" Foreground="#688086" FontSize="11" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Background="White" CornerRadius="12" Padding="18" Margin="4,0,4,7"><StackPanel><TextBlock Text="BATTERY" Foreground="#829498" FontSize="9" FontWeight="Bold"/><TextBlock x:Name="BatteryStatusText" Text="Refresh to read" Foreground="#143E50" FontSize="21" FontWeight="SemiBold" Margin="0,8,0,0"/><TextBlock x:Name="BatteryDetailText" Foreground="#688086" FontSize="11" Margin="0,4,0,0"/></StackPanel></Border>
+                            <Border Background="White" CornerRadius="12" Padding="18" Margin="7,0,0,7"><StackPanel><TextBlock Text="STORAGE" Foreground="#829498" FontSize="9" FontWeight="Bold"/><TextBlock x:Name="StorageStatusText" Text="Refresh to read" Foreground="#143E50" FontSize="21" FontWeight="SemiBold" Margin="0,8,0,0"/><TextBlock x:Name="StorageDetailText" Foreground="#688086" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"/></StackPanel></Border>
+                        </UniformGrid>
+                        <TextBlock Text="Malware protection" Foreground="#143E50" FontSize="16" FontWeight="Bold" Margin="2,8,0,6"/>
+                        <Border Background="White" CornerRadius="12" Padding="18"><StackPanel><TextBlock Text="TidyCircuit does not scan for or diagnose malware. Use Windows Security / Microsoft Defender for threat protection." Foreground="#45616A" FontSize="12" TextWrapping="Wrap"/><Button Content="Open Windows Security" HorizontalAlignment="Left" Background="#143E50" Foreground="White" Margin="0,10,0,0" Click="Safety_Click"/></StackPanel></Border>
+                    </StackPanel></ScrollViewer>
+                </TabItem>
             </TabControl>
-            <TextBlock Grid.Row="3" Text="Local rules only · no uploads · Windows folders and app files stay protected" Foreground="#829498" FontSize="10" Margin="3,9,0,0"/>
+            <TextBlock Grid.Row="3" Text="Unsigned candidate · local review · no uploads · Recycle Bin only" Foreground="#829498" FontSize="10" Margin="3,9,0,0"/>
         </Grid>
     </Grid>
 </Window>
