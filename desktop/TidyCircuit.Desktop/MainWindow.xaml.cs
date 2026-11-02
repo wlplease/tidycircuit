@@ -444,7 +444,7 @@ public partial class MainWindow : Window
         }
         return Convert.ToHexString(hash.GetHashAndReset());
     }
-    private static string Format(long bytes) { string[] units = ["B", "KB", "MB", "GB", "TB"]; double value = bytes; var unit = 0; while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; } return $"{value:0.#} {units[unit]}"; }
+    internal static string Format(long bytes) { string[] units = ["B", "KB", "MB", "GB", "TB"]; double value = bytes; var unit = 0; while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; } return $"{value:0.#} {units[unit]}"; }
     private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) { _searchDebounce.Stop(); _searchDebounce.Start(); }
     private void SearchBox_GotKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
     {
@@ -533,9 +533,9 @@ public partial class MainWindow : Window
                         "Selected only" => row.Marked,
                         "Large · 100 MB+" => row.Size >= 100L * 1024 * 1024,
                         "Older · 6 months+" => row.AgeDays >= 183,
-                        "Duplicates · verified" => row.Duplicate,
+                        "Exact duplicates" => row.Duplicate,
                         "Same-size candidates" => row.SizeCandidate,
-                        "Temporary files" => row.Type.Equals(".tmp", StringComparison.OrdinalIgnoreCase) || row.Type.Equals(".temp", StringComparison.OrdinalIgnoreCase) || IsRecognizedBrowserCacheFile(row.FullPath),
+                        "Temporary files" => IsRecognizedBrowserCacheFile(row.FullPath) || IsRecognizedUserTempFile(row),
                         _ => true
                     };
                     var folderMatches = string.IsNullOrEmpty(selectedFolder) || Path.GetDirectoryName(row.RelativePath)?.StartsWith(selectedFolder, StringComparison.OrdinalIgnoreCase) == true;
@@ -597,6 +597,16 @@ public partial class MainWindow : Window
     private void ViewFilterBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (ViewFilterBox?.SelectedItem is System.Windows.Controls.ComboBoxItem item) _selectedViewFilter = item.Content?.ToString() ?? "All files";
+        if (PresetDescriptionText is not null) PresetDescriptionText.Text = _selectedViewFilter switch
+        {
+            "Large · 100 MB+" => "Large files · at least 100 MiB each, sorted by the current sort order.",
+            "Older · 6 months+" => "Older files · last modified at least 183 days ago; age alone does not mean safe to remove.",
+            "Exact duplicates" => "Exact duplicates · file contents match after you run Verify same-size; nothing is auto-selected.",
+            "Same-size candidates" => "Duplicate candidates · same size only; contents have not been compared yet.",
+            "Temporary files" => "Temporary files · recognized browser cache, or user Temp .tmp/.temp files unchanged for 7+ days.",
+            "Selected only" => "Selected only · checked files across the full scan, even when other filters hid them.",
+            _ => "All files · choose a review preset to see its exact rules."
+        };
         if (IsLoaded) _ = ApplyCurrentFiltersAsync();
     }
     private void FolderFilterBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -735,6 +745,115 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { Tag: string index } && int.TryParse(index, out var tabIndex)) MainTabs.SelectedIndex = tabIndex;
         SetActiveNavigation();
+    }
+    private void ShowFolderMap_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_selectedRoot) || _automaticScan)
+        {
+            MessageBox.Show("Choose and scan one folder first. The folder map uses only that scan's file sizes.", "Folder map", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var rootLabel = Path.GetFileName(Path.TrimEndingDirectorySeparator(_selectedRoot));
+        if (string.IsNullOrWhiteSpace(rootLabel)) rootLabel = _selectedRoot;
+        var groups = _rows.GroupBy(row =>
+        {
+            var relative = row.RelativePath;
+            var parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length <= 1 ? $"Files directly in {rootLabel}" : parts[0];
+        }, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { Name = group.Key, Files = group.Count(), Bytes = group.Sum(row => Math.Max(0, row.Size)) })
+            .OrderByDescending(group => group.Bytes).ThenBy(group => group.Name, StringComparer.OrdinalIgnoreCase).Take(20).ToList();
+        var largest = groups.FirstOrDefault()?.Bytes ?? 0;
+        var total = groups.Sum(group => group.Bytes);
+        var partial = !_scanComplete ? " · partial scan" : "";
+        var dialog = new Window
+        {
+            Owner = this, Title = "Space by folder", Width = 760, Height = 660, MinWidth = 600, MinHeight = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#F3F8F6")!,
+            ShowInTaskbar = false
+        };
+        var layout = new DockPanel { Margin = new Thickness(22) };
+        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+        header.Children.Add(new TextBlock { Text = "Where your space is going", FontSize = 24, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#143E50")! });
+        header.Children.Add(new TextBlock { Text = $"Top-level folders in {rootLabel} · {Format(total)} shown{partial} · read-only map", FontSize = 12, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#638287")!, Margin = new Thickness(0, 5, 0, 0) });
+        DockPanel.SetDock(header, Dock.Top); layout.Children.Add(header);
+        if (groups.Count == 0)
+            layout.Children.Add(new TextBlock { Text = "No files were found in this scan yet.", VerticalAlignment = VerticalAlignment.Center, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#638287")! });
+        else
+        {
+            var stack = new StackPanel();
+            foreach (var group in groups)
+            {
+                var card = new Border { Background = System.Windows.Media.Brushes.White, CornerRadius = new CornerRadius(10), Padding = new Thickness(13, 10, 13, 9), Margin = new Thickness(0, 0, 0, 8) };
+                var grid = new Grid(); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var name = new TextBlock { Text = group.Name, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#143E50")!, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = group.Name };
+                var detail = new TextBlock { Text = $"{group.Files:N0} files", FontSize = 10, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#829498")!, Margin = new Thickness(0, 3, 0, 0) };
+                var size = new TextBlock { Text = Format(group.Bytes), FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#087D86")!, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+                var bar = new ProgressBar { Minimum = 0, Maximum = 100, Value = largest <= 0 ? 0 : 100d * group.Bytes / largest, Height = 6, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#31B5A6")!, Background = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#E7F5F2")!, Margin = new Thickness(0, 8, 0, 0) };
+                Grid.SetRow(name, 0); Grid.SetColumn(name, 0); grid.Children.Add(name); Grid.SetRow(detail, 1); grid.Children.Add(detail);
+                Grid.SetRow(size, 0); Grid.SetColumn(size, 1); Grid.SetRowSpan(size, 2); grid.Children.Add(size);
+                Grid.SetRow(bar, 2); Grid.SetColumnSpan(bar, 2); grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); grid.Children.Add(bar);
+                card.Child = grid; stack.Children.Add(card);
+            }
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = stack };
+            layout.Children.Add(scroll);
+        }
+        dialog.Content = layout; dialog.ShowDialog();
+    }
+    private void CleanupHistory_Click(object sender, RoutedEventArgs e) => ShowCleanupHistory();
+    private void ShowCleanupHistory()
+    {
+        var entries = new List<CleanupHistoryEntry>();
+        try
+        {
+            if (File.Exists(OperationLogPath))
+            {
+                foreach (var line in File.ReadLines(OperationLogPath).TakeLast(5000))
+                {
+                    try
+                    {
+                        using var json = JsonDocument.Parse(line); var item = json.RootElement;
+                        var action = item.TryGetProperty("action", out var actionNode) ? actionNode.GetString() : null;
+                        var result = item.TryGetProperty("result", out var resultNode) ? resultNode.GetString() : null;
+                        if (!string.Equals(action, "recycle", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(result) || result == "requested") continue;
+                        var path = item.TryGetProperty("path", out var pathNode) ? pathNode.GetString() ?? "" : "";
+                        var bytes = item.TryGetProperty("bytes", out var bytesNode) && bytesNode.TryGetInt64(out var value) ? value : 0;
+                        var time = item.TryGetProperty("timeUtc", out var timeNode) && DateTimeOffset.TryParse(timeNode.GetString(), out var parsed) ? parsed.ToLocalTime() : DateTimeOffset.MinValue;
+                        entries.Add(new(time, path, bytes, HistoryResultLabel(result), result));
+                    }
+                    catch (JsonException) { }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show($"Could not read the local cleanup history. {ex.Message}", "Cleanup history", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        entries = entries.OrderByDescending(item => item.Time).Take(1000).ToList();
+        var dialog = new Window { Owner = this, Title = "Cleanup history", Width = 980, Height = 620, MinWidth = 700, MinHeight = 440, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = System.Windows.Media.Brushes.White, ShowInTaskbar = false };
+        var root = new DockPanel { Margin = new Thickness(18) };
+        var footer = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 12, 0, 0) };
+        var summary = new TextBlock { Text = entries.Count == 0 ? "No cleanup actions recorded yet." : $"Latest {entries.Count:N0} recorded cleanup results · logs stay on this PC", Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#638287")!, VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(summary, Dock.Left); footer.Children.Add(summary);
+        var openBin = new Button { Content = "Open Recycle Bin", Background = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#087D86")!, Foreground = System.Windows.Media.Brushes.White, Padding = new Thickness(14, 8, 14, 8) };
+        openBin.Click += (_, _) => { try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }); } catch (Exception ex) { MessageBox.Show($"Could not open the Recycle Bin. {ex.Message}", "Recycle Bin", MessageBoxButton.OK, MessageBoxImage.Information); } };
+        footer.Children.Add(openBin); DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
+        var grid = new DataGrid { ItemsSource = entries, AutoGenerateColumns = false, IsReadOnly = true, CanUserAddRows = false, EnableRowVirtualization = true, HeadersVisibility = DataGridHeadersVisibility.Column, GridLinesVisibility = DataGridGridLinesVisibility.Horizontal };
+        grid.Columns.Add(new DataGridTextColumn { Header = "WHEN", Binding = new Binding(nameof(CleanupHistoryEntry.WhenDisplay)), Width = 145 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "FILE", Binding = new Binding(nameof(CleanupHistoryEntry.FileName)), Width = 160 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "FULL PATH", Binding = new Binding(nameof(CleanupHistoryEntry.Path)), Width = new DataGridLength(1, DataGridLengthUnitType.Star), MinWidth = 220 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "SIZE", Binding = new Binding(nameof(CleanupHistoryEntry.SizeDisplay)), Width = 90 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "RESULT", Binding = new Binding(nameof(CleanupHistoryEntry.Status)), Width = 250 });
+        root.Children.Add(grid); dialog.Content = root; dialog.ShowDialog();
+    }
+    private static string HistoryResultLabel(string result)
+    {
+        if (result.StartsWith("moved", StringComparison.OrdinalIgnoreCase)) return "Moved to Recycle Bin";
+        if (result.StartsWith("skipped:", StringComparison.OrdinalIgnoreCase)) return FriendlySkipReason(result[8..].Trim());
+        if (result.StartsWith("failed:", StringComparison.OrdinalIgnoreCase)) return "Could not complete · see local error type";
+        return result;
     }
     private void SetActiveNavigation()
     {
@@ -1089,11 +1208,40 @@ public partial class MainWindow : Window
         }
         return false;
     }
+    private static string FriendlySkipReason(string? reason)
+    {
+        var value = reason ?? "unavailable";
+        if (value.Contains("inside a protected Windows or app folder", StringComparison.OrdinalIgnoreCase) || value.Contains("protected app-data", StringComparison.OrdinalIgnoreCase)) return "Protected Windows/app location · left untouched";
+        if (value.Contains("changed since", StringComparison.OrdinalIgnoreCase)) return "Changed since scan · scan again before cleanup";
+        if (value.Contains("linked folder", StringComparison.OrdinalIgnoreCase) || value.Contains("folder is a link", StringComparison.OrdinalIgnoreCase)) return "Linked folder · skipped for safety";
+        if (value.Contains("local fixed drive", StringComparison.OrdinalIgnoreCase)) return "Drive does not support the app’s safe Recycle Bin workflow";
+        if (value.Contains("outside the selected folder", StringComparison.OrdinalIgnoreCase)) return "Outside the selected folder · left untouched";
+        if (value.Contains("app, system, script, or shortcut", StringComparison.OrdinalIgnoreCase)) return "Program/system file · protected";
+        if (value.Contains("hidden, system", StringComparison.OrdinalIgnoreCase)) return "Hidden, system, or read-only item · protected";
+        if (value.Contains("in use", StringComparison.OrdinalIgnoreCase) || value.Contains("unavailable", StringComparison.OrdinalIgnoreCase)) return "Busy or unavailable · close the app using it, then scan again";
+        if (value.Contains("access denied", StringComparison.OrdinalIgnoreCase)) return "Windows denied access · left untouched";
+        if (value.Contains("failed:", StringComparison.OrdinalIgnoreCase)) return "Windows could not complete the move · left in place";
+        return value;
+    }
     private static string DescribeBlockedItems(IEnumerable<(FileRow Row, string? Reason)> blocked) => string.Join(Environment.NewLine,
         blocked.GroupBy(item => item.Reason ?? "unavailable")
             .OrderByDescending(group => group.Count())
             .Take(3)
-            .Select(group => $"• {group.Count():N0} {group.Key} (example: {Path.GetFileName(group.First().Row.FullPath)})"));
+            .Select(group => $"• {group.Count():N0} · {FriendlySkipReason(group.Key)} (example: {Path.GetFileName(group.First().Row.FullPath)})"));
+    private void ShowSkippedItemsWindow(IEnumerable<CleanupSkipItem> items)
+    {
+        var list = items.Take(2000).ToList(); if (list.Count == 0) return;
+        var dialog = new Window { Owner = this, Title = "Skipped files · why they stayed", Width = 900, Height = 560, MinWidth = 650, MinHeight = 400, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = System.Windows.Media.Brushes.White, ShowInTaskbar = false };
+        var root = new DockPanel { Margin = new Thickness(18) };
+        var note = new TextBlock { Text = $"{list.Count:N0} item(s) were left in place. Close apps holding files, rescan changed files, or keep protected items untouched.", TextWrapping = TextWrapping.Wrap, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#638287")!, Margin = new Thickness(0, 0, 0, 12) };
+        DockPanel.SetDock(note, Dock.Top); root.Children.Add(note);
+        var grid = new DataGrid { ItemsSource = list, AutoGenerateColumns = false, IsReadOnly = true, CanUserAddRows = false, EnableRowVirtualization = true, HeadersVisibility = DataGridHeadersVisibility.Column, GridLinesVisibility = DataGridGridLinesVisibility.Horizontal };
+        grid.Columns.Add(new DataGridTextColumn { Header = "FILE", Binding = new Binding(nameof(CleanupSkipItem.Name)), Width = 160 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "FULL PATH", Binding = new Binding(nameof(CleanupSkipItem.FullPath)), Width = new DataGridLength(1, DataGridLengthUnitType.Star), MinWidth = 240 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "SIZE", Binding = new Binding(nameof(CleanupSkipItem.SizeDisplay)), Width = 90 });
+        grid.Columns.Add(new DataGridTextColumn { Header = "WHY IT WAS SKIPPED", Binding = new Binding(nameof(CleanupSkipItem.FriendlyReason)), Width = 280 });
+        root.Children.Add(grid); dialog.Content = root; dialog.ShowDialog();
+    }
     private bool ConfirmRecycleSelection(IReadOnlyList<FileRow> eligible, long totalBytes, string safetyNotes)
     {
         var dialog = new Window
@@ -1175,7 +1323,7 @@ public partial class MainWindow : Window
         if (eligible.Count == 0)
         {
             StatusText.Text = "No selected files are eligible to move";
-            MessageBox.Show($"No files were moved. All {blocked.Count:N0} selected files are protected, changed, or outside the supported cache locations.\n\n{DescribeBlockedItems(blocked)}\n\nFor cache cleanup, TidyCircuit supports only recognized Chrome, Edge, Brave, and Firefox temporary cache files. Search for Browser cache, then use Select visible. Close the browser and scan again if files changed while scanning.", "Nothing eligible to move", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowSkippedItemsWindow(blocked.Select(item => new CleanupSkipItem(item.Row.FullPath, item.Row.Size, FriendlySkipReason(item.Reason))));
             return;
         }
         var total = eligible.Sum(row => row.Size);
@@ -1210,6 +1358,8 @@ public partial class MainWindow : Window
             await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
             var skipped = blocked.Count + result.Skipped;
             StatusText.Text = $"Moved {result.Moved.Count:N0} file(s) · {skipped:N0} skipped and remain selected · {(result.LogWarning ? "check operation log status" : "operation logged locally")}";
+            ShowSkippedItemsWindow(blocked.Select(item => new CleanupSkipItem(item.Row.FullPath, item.Row.Size, FriendlySkipReason(item.Reason)))
+                .Concat(result.SkippedItems));
             if (!string.IsNullOrWhiteSpace(result.StoppedOn))
                 MessageBox.Show($"Cleanup stopped after handling {result.Moved.Count:N0} file(s). Could not move {result.StoppedOn}.\n\nCheck the Recycle Bin for files already moved.", "Cleanup stopped", MessageBoxButton.OK, MessageBoxImage.Warning);
             else if (result.Cancelled)
@@ -1285,7 +1435,7 @@ public partial class MainWindow : Window
     }
     private static CleanupResult RecycleEligibleFiles(List<FileRow> eligible, string root, CancellationToken token, IProgress<(int Done, int Total, string Name)> progress)
     {
-        var moved = new List<FileRow>(); var skipped = 0; var logWarning = false; string? stoppedOn = null; var completed = 0;
+        var moved = new List<FileRow>(); var skipped = 0; var skippedItems = new List<CleanupSkipItem>(); var logWarning = false; string? stoppedOn = null; var completed = 0;
         var logPath = OperationLogPath;
         Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
         using var log = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.Read, 64 * 1024), new UTF8Encoding(false), 64 * 1024);
@@ -1304,7 +1454,7 @@ public partial class MainWindow : Window
                 var row = eligible[offset++];
                 var changedReason = RecycleBlockReason(row, string.IsNullOrWhiteSpace(row.ScanRoot) ? root : row.ScanRoot);
                 if (changedReason is null) { batch.Add(row); continue; }
-                skipped++; completed++; TryLog("recycle", row, "skipped: " + changedReason); Report(row);
+                skipped++; skippedItems.Add(new(row.FullPath, row.Size, FriendlySkipReason(changedReason))); completed++; TryLog("recycle", row, "skipped: " + changedReason); Report(row);
             }
             if (batch.Count == 0 || token.IsCancellationRequested) continue;
 
@@ -1323,7 +1473,8 @@ public partial class MainWindow : Window
                     logWarning = true; skipped += group.Count; completed += group.Count;
                     stoppedOn = Path.GetFileName(group[0].FullPath);
                     foreach (var row in group) Report(row);
-                    return new CleanupResult(moved, skipped, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
+                    foreach (var row in group) skippedItems.Add(new(row.FullPath, row.Size, "Operation log unavailable · move stopped before changing files"));
+                    return new CleanupResult(moved, skipped, skippedItems, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
                 }
 
                 var shellFailed = false;
@@ -1348,11 +1499,11 @@ public partial class MainWindow : Window
                         FileSystem.DeleteFile(row.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
                         moved.Add(row); TryLog("recycle", row, shellFailed ? "moved by individual fallback" : "moved");
                     }
-                    catch (IOException) { skipped++; TryLog("recycle", row, "skipped: file unavailable or in use"); }
-                    catch (UnauthorizedAccessException) { skipped++; TryLog("recycle", row, "skipped: access denied"); }
+                    catch (IOException) { skipped++; skippedItems.Add(new(row.FullPath, row.Size, FriendlySkipReason("file unavailable or in use"))); TryLog("recycle", row, "skipped: file unavailable or in use"); }
+                    catch (UnauthorizedAccessException) { skipped++; skippedItems.Add(new(row.FullPath, row.Size, FriendlySkipReason("access denied"))); TryLog("recycle", row, "skipped: access denied"); }
                     catch (Exception ex)
                     {
-                        skipped++; logWarning |= !TryLogFailure(log, row, ex);
+                        skipped++; skippedItems.Add(new(row.FullPath, row.Size, FriendlySkipReason("failed: " + ex.GetType().Name))); logWarning |= !TryLogFailure(log, row, ex);
                         stoppedOn ??= Path.GetFileName(row.FullPath);
                     }
                     completed++; Report(row);
@@ -1361,7 +1512,7 @@ public partial class MainWindow : Window
                 log.Flush();
             }
         }
-        return new CleanupResult(moved, skipped, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
+        return new CleanupResult(moved, skipped, skippedItems, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
     }
     private static bool TryLogFailure(StreamWriter log, FileRow row, Exception exception)
     {
@@ -1454,7 +1605,18 @@ public sealed record GuideChatMessage(string Text, string BubbleBrush, string Te
 }
 public sealed record TemporaryFindResult(int Count, int Locations, int Errors);
 public sealed class InlineProgress<T>(Action<T> report) : IProgress<T> { public void Report(T value) => report(value); }
-public sealed record CleanupResult(List<FileRow> Moved, int Skipped, bool LogWarning, string? StoppedOn, bool Cancelled);
+public sealed record CleanupResult(List<FileRow> Moved, int Skipped, List<CleanupSkipItem> SkippedItems, bool LogWarning, string? StoppedOn, bool Cancelled);
+public sealed record CleanupHistoryEntry(DateTimeOffset Time, string Path, long Bytes, string Status, string RawResult)
+{
+    public string FileName => System.IO.Path.GetFileName(Path);
+    public string SizeDisplay => MainWindow.Format(Bytes);
+    public string WhenDisplay => Time == DateTimeOffset.MinValue ? "Unknown time" : Time.ToString("yyyy-MM-dd HH:mm");
+}
+public sealed record CleanupSkipItem(string FullPath, long Bytes, string FriendlyReason)
+{
+    public string Name => System.IO.Path.GetFileName(FullPath);
+    public string SizeDisplay => MainWindow.Format(Bytes);
+}
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
     public void ReplaceAll(IEnumerable<T> items)

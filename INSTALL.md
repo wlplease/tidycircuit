@@ -2,8 +2,8 @@
 
 ## Install the Windows release candidate
 
-1. Download `TidyCircuit-0.2.0-rc.3-win-x64.zip` from the [GitHub prerelease](https://github.com/wlplease/tidycircuit/releases/tag/v0.2.0-rc.3).
-2. Optional integrity check: `certutil -hashfile TidyCircuit-0.2.0-rc.3-win-x64.zip SHA256`, then compare the result with the published `.sha256` file.
+1. Download `TidyCircuit-0.2.0-rc.4-win-x64.zip` from the [GitHub prerelease](https://github.com/wlplease/tidycircuit/releases/tag/v0.2.0-rc.4).
+2. Optional integrity check: `certutil -hashfile TidyCircuit-0.2.0-rc.4-win-x64.zip SHA256`, then compare the result with the published `.sha256` file.
 3. Right-click the ZIP, choose **Extract All**, and extract it to a folder you own (for example, `Downloads\TidyCircuit`).
 4. Run `TidyCircuit.exe` from the extracted folder. It is self-contained; no separate .NET runtime or installer is needed.
 5. Choose a folder to scan. The first scan only reads file metadata. Review results before exporting, organizing, or moving any files.

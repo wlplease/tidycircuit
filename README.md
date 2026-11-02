@@ -4,12 +4,14 @@
 
 **Make room. Keep control.** TidyCircuit is a local Windows file review and organization app. It helps people understand a chosen folder, identify exact duplicates, and make deliberate, recoverable changes.
 
-[Download 0.2.0 RC.3 (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.3/TidyCircuit-0.2.0-rc.3-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
+[Download 0.2.0 RC.4 (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.4/TidyCircuit-0.2.0-rc.4-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
 
 ## What it does
 
 - Scans a folder you select, shows files as they are found, and reports progress. Large scans can pause, resume, or stop while keeping partial results.
 - Filters and sorts by size, age, type, path, duplicate status, and folder. Select all applies only to the results currently shown. Exports a local TSV review list.
+- Shows a visual top-level folder space map for a selected folder scan, plus persistent cleanup history and the local Recycle Bin recovery path.
+- Explains cleanup skips per file in plain language, including protected paths, files changed since scanning, linked folders, and items Windows reports as busy or unavailable.
 - Groups same-size candidates first. Only after you ask, compares files up to 256 MB with local SHA-256 and labels exact matches; hashes and paths stay on your PC.
 - Finds recognized browser cache files and older `.tmp` / `.temp` files in the current user's Temp directory. It does not clear Windows or arbitrary app caches.
 - Offers a manually approved file organization preview, skips conflicts and protected paths, and records moves for an Undo attempt.
@@ -20,7 +22,7 @@ Cleanup is manual. Before a Recycle Bin action, the app rechecks eligibility and
 
 ## Release candidate status
 
-This is an **unsigned 0.2.0 RC.3 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. The package builds successfully; its new review and cleanup UI has not yet been re-verified on a separate clean PC. Do not treat it as a production release.
+This is an **unsigned 0.2.0 RC.4 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. The package builds successfully; the latest review and cleanup UI has not yet been re-verified on a separate clean PC. Do not treat it as a production release.
 
 ## Install and uninstall
 
