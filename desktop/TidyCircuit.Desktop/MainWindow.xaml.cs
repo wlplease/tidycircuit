@@ -790,11 +790,12 @@ public partial class MainWindow : Window
         try
         {
             var rootFull = Path.GetFullPath(root);
-            if ((File.GetAttributes(rootFull) & FileAttributes.ReparsePoint) != 0) return "selected folder is a link";
             var full = Path.GetFullPath(row.FullPath); var relative = Path.GetRelativePath(rootFull, full);
             if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)) return "outside the selected folder";
             var volume = Path.GetPathRoot(full);
             if (string.IsNullOrWhiteSpace(volume) || volume.StartsWith("\\\\", StringComparison.Ordinal) || new DriveInfo(volume).DriveType != DriveType.Fixed) return "not on a local fixed drive with standard Recycle Bin recovery";
+            if ((File.GetAttributes(rootFull) & FileAttributes.ReparsePoint) != 0) return "selected folder is a link";
+            if (HasReparsePointInPath(full)) return "path passes through a linked folder";
             var recognizedBrowserCache = IsRecognizedBrowserCacheFile(full);
             var recognizedUserTemp = IsRecognizedUserTempFile(row);
             if (full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(ProtectedPathParts.Contains)) return "inside a protected Windows or app folder";
@@ -807,6 +808,19 @@ public partial class MainWindow : Window
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return "unavailable or changed since scanning"; }
+    }
+    private static bool HasReparsePointInPath(string file)
+    {
+        var current = Path.GetDirectoryName(Path.GetFullPath(file));
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var normalized = Path.GetFullPath(current);
+            if ((File.GetAttributes(normalized) & FileAttributes.ReparsePoint) != 0) return true;
+            var parent = Path.GetDirectoryName(normalized);
+            if (string.IsNullOrWhiteSpace(parent) || string.Equals(Path.GetFullPath(parent), normalized, StringComparison.OrdinalIgnoreCase)) return false;
+            current = parent;
+        }
+        return false;
     }
     private static string DescribeBlockedItems(IEnumerable<(FileRow Row, string? Reason)> blocked) => string.Join(Environment.NewLine,
         blocked.GroupBy(item => item.Reason ?? "unavailable")
