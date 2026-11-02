@@ -4,7 +4,7 @@
 
 **Make room. Keep control.** TidyCircuit is a local Windows file review and organization app. It helps people understand a chosen folder, identify exact duplicates, and make deliberate, recoverable changes.
 
-[Download 0.2.0 Release Candidate (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.2/TidyCircuit-0.2.0-rc.2-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
+[Download 0.2.0 RC.3 (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.3/TidyCircuit-0.2.0-rc.3-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
 
 ## What it does
 
@@ -20,7 +20,7 @@ Cleanup is manual. Before a Recycle Bin action, the app rechecks eligibility and
 
 ## Release candidate status
 
-This is an **unsigned 0.2.0 RC.2 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. This release candidate has been exercised on the project PC with disposable files. A separate clean-PC installation test is still pending; do not treat it as a production release.
+This is an **unsigned 0.2.0 RC.3 release candidate**, built as a self-contained Windows x64 ZIP. Windows SmartScreen may warn that the publisher is unknown. The checksum file is beside the ZIP in the GitHub prerelease. A checksum checks file integrity against that release; it does not prove the publisher or certify safety. The package builds successfully; its new review and cleanup UI has not yet been re-verified on a separate clean PC. Do not treat it as a production release.
 
 ## Install and uninstall
 
