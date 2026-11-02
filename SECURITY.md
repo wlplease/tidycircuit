@@ -10,8 +10,6 @@ The Safety screen only offers to open Windows Security. It does not pass a file 
 
 ## Release trust
 
-The current Windows ZIP is unsigned. SmartScreen may warn, and the SHA-256 checksum detects accidental or malicious file changes only when compared with the trusted release value; it does not establish publisher identity or guarantee safety. Releases are published in the public GitHub repository. Review the source and download only from the official Releases page. Code signing and a reproducible, automated release pipeline are still needed for stronger distribution trust.
-
 The public 0.1.1 Windows release predates the current source target and is unsigned. The desktop source now targets .NET 10, Microsoft's current Long-Term Support release. Build and verify a fresh release from this source before distributing the updated features; the existing public 0.1.1 ZIP is unchanged.
 
 ## Optional companion script
@@ -22,4 +20,4 @@ The repository also contains `companion/TidyCircuit.ps1`. It is separate from th
 
 Avoid posting private file names, paths, or system reports in public issues. Private vulnerability reporting is enabled for this repository: [Report a vulnerability privately](https://github.com/wlplease/tidycircuit/security/advisories/new). Include affected version/commit, impact, and safe reproduction steps. Please allow maintainers reasonable time to investigate and prepare a fix before public disclosure. Do not include real personal files or credentials.
 
-GitHub private vulnerability reporting, dependency alerts, and automated security fixes are enabled. CodeQL analysis is configured for C# and JavaScript on pushes, pull requests, and a weekly schedule. These tools can miss vulnerabilities and do not replace careful review. The project does not claim to be “hack-proof,” formally audited, or guaranteed secure. Reported changes still need review and release verification.
+GitHub private vulnerability reporting, dependency alerts, and automated security fixes are enabled. GitHub CodeQL default setup scans C# with the extended query suite on code changes and weekly. The initial scan passed; its local-path alerts were reviewed and dismissed as false positives because paths come from the native folder picker or Windows per-user locations, with link skipping and cleanup scope checks. CodeQL does not analyze the website's inline JavaScript or PowerShell companion. These tools can miss vulnerabilities and do not replace careful review. The project does not claim to be “hack-proof,” formally audited, or guaranteed secure. Reported changes still need review and release verification.
