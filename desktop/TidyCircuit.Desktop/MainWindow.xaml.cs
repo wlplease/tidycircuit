@@ -502,7 +502,14 @@ public partial class MainWindow : Window
         UpdateMarkedSummary();
     }
     private void SelectAll_Click(object sender, RoutedEventArgs e) => SetMarks(_rows, true);
-    private void MarkVisible_Click(object sender, RoutedEventArgs e) => SetMarks(FilesGrid.Items.OfType<FileRow>().ToList(), true);
+    private void MarkVisible_Click(object sender, RoutedEventArgs e)
+    {
+        var visible = FilesGrid.Items.OfType<FileRow>().ToHashSet();
+        _isUpdatingMarks = true;
+        try { foreach (var row in _rows) row.Marked = visible.Contains(row); }
+        finally { _isUpdatingMarks = false; }
+        UpdateMarkedSummary();
+    }
     private void ClearMarks_Click(object sender, RoutedEventArgs e) => SetMarks(_rows, false);
     private static string OperationLogPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyCircuit", "operations.jsonl");
     private static void WriteOperation(string action, FileRow row, string result)
@@ -535,33 +542,76 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return "unavailable or changed since scanning"; }
     }
+    private static string DescribeBlockedItems(IEnumerable<(FileRow Row, string? Reason)> blocked) => string.Join(Environment.NewLine,
+        blocked.GroupBy(item => item.Reason ?? "unavailable")
+            .OrderByDescending(group => group.Count())
+            .Take(3)
+            .Select(group => $"• {group.Count():N0} {group.Key} (example: {Path.GetFileName(group.First().Row.FullPath)})"));
     private async void RecycleMarked_Click(object sender, RoutedEventArgs e)
     {
         var marked = _rows.Where(r => r.Marked).ToList(); if (marked.Count == 0 || string.IsNullOrWhiteSpace(_selectedRoot)) return;
-        var blocked = marked.Select(row => (Row: row, Reason: RecycleBlockReason(row, _selectedRoot))).Where(x => x.Reason is not null).ToList();
-        if (blocked.Count > 0)
+        StatusText.Text = $"Checking {marked.Count:N0} selected files…";
+        ScanProgress.Visibility = Visibility.Visible; ScanProgress.IsIndeterminate = true;
+        ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
+        List<(FileRow Row, string? Reason)> eligibility;
+        try { eligibility = await Task.Run(() => marked.Select(row => (Row: row, Reason: RecycleBlockReason(row, _selectedRoot))).ToList()); }
+        catch (Exception ex)
         {
-            MessageBox.Show($"No files were moved. {blocked.Count} marked file(s) are protected or changed. Clear marks and select only regular, visible personal files inside the chosen folder.", "Protected items", MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusText.Text = "Could not check the selected files";
+            MessageBox.Show($"Could not check the selected files. No files were moved. {ex.Message}", "Safety check failed", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
-        var total = marked.Sum(row => row.Size);
-        var cacheOnly = marked.All(row => IsRecognizedBrowserCacheFile(row.FullPath));
+        finally
+        {
+            ScanProgress.IsIndeterminate = false; ScanProgress.Visibility = Visibility.Collapsed;
+            ScanButton.IsEnabled = FolderButton.IsEnabled = true;
+            UpdateMarkedSummary();
+        }
+        var eligible = eligibility.Where(item => item.Reason is null).Select(item => item.Row).ToList();
+        var blocked = eligibility.Where(item => item.Reason is not null).ToList();
+        if (eligible.Count == 0)
+        {
+            StatusText.Text = "No selected files are eligible to move";
+            MessageBox.Show($"No files were moved. All {blocked.Count:N0} selected files are protected, changed, or outside the supported cache locations.\n\n{DescribeBlockedItems(blocked)}\n\nFor cache cleanup, TidyCircuit supports only recognized Chrome, Edge, Brave, and Firefox temporary cache files. Search for Browser cache, then use Select visible. Close the browser and scan again if files changed while scanning.", "Nothing eligible to move", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var total = eligible.Sum(row => row.Size);
+        var cacheOnly = eligible.All(row => IsRecognizedBrowserCacheFile(row.FullPath));
+        var skipNote = blocked.Count > 0 ? $"\n\n{blocked.Count:N0} protected, changed, or unsupported file(s) will be skipped and stay selected:\n{DescribeBlockedItems(blocked)}" : "";
         var cacheNote = cacheOnly ? "\n\nThese are recognized temporary browser cache files only. Browser pages may reload or cache may be rebuilt. Cookies, history, saved passwords, and bookmarks are not included." : "";
-        var answer = MessageBox.Show($"Move {marked.Count:N0} marked file(s) ({Format(total)}) to the Windows Recycle Bin?{cacheNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.Yes) return;
         ScanButton.IsEnabled = FolderButton.IsEnabled = false;
         var moved = new List<FileRow>();
+        var skippedDuringAction = 0;
         var logWarning = false;
         try
         {
-            foreach (var row in marked)
+            foreach (var row in eligible)
             {
                 try
                 {
+                    var changedReason = RecycleBlockReason(row, _selectedRoot);
+                    if (changedReason is not null)
+                    {
+                        skippedDuringAction++;
+                        try { WriteOperation("recycle", row, "skipped: " + changedReason); } catch { logWarning = true; }
+                        continue;
+                    }
                     WriteOperation("recycle", row, "requested");
                     FileSystem.DeleteFile(row.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
                     moved.Add(row);
                     try { WriteOperation("recycle", row, "moved"); } catch { logWarning = true; }
+                }
+                catch (IOException)
+                {
+                    skippedDuringAction++;
+                    try { WriteOperation("recycle", row, "skipped: file unavailable or in use"); } catch { logWarning = true; }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    skippedDuringAction++;
+                    try { WriteOperation("recycle", row, "skipped: access denied"); } catch { logWarning = true; }
                 }
                 catch (Exception ex)
                 {
@@ -571,11 +621,11 @@ public partial class MainWindow : Window
                 }
             }
             _rows.RemoveRange(moved);
-            SetMarks(_rows, false);
             FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_rows.Sum(r => r.Size));
             var (duplicates, errors) = await Task.Run(() => FindDuplicates(_rows.ToList())); DuplicatesText.Text = duplicates.ToString("N0");
             await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
-            StatusText.Text = $"Moved {moved.Count:N0} file(s) to Recycle Bin · {(errors > 0 ? $"{errors} file(s) could not be rechecked" : logWarning ? "check operation log status" : "operation logged locally")}";
+            var skipped = blocked.Count + skippedDuringAction;
+            StatusText.Text = $"Moved {moved.Count:N0} file(s) · {skipped:N0} skipped and remain selected · {(errors > 0 ? $"{errors} file(s) could not be rechecked" : logWarning ? "check operation log status" : "operation logged locally")}";
         }
         finally { ScanButton.IsEnabled = FolderButton.IsEnabled = true; }
     }

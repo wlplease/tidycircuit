@@ -213,7 +213,7 @@
                                     <Button Grid.Column="4" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
                                 </Grid>
                                 <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Select all files in this scan, including filtered results." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Select all covers the scan. Select visible replaces selection with the shown results." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
                                     <Button Grid.Column="1" Content="Export selected" Background="#143E50" Foreground="White" Padding="13,8" Margin="0,0,7,0" Click="Export_Click"/>
                                     <Button x:Name="RecycleButton" IsEnabled="False" Grid.Column="2" Content="Move selected to Recycle Bin" Background="#FBECE7" Foreground="#9B4D3B" Padding="13,8" Click="RecycleMarked_Click"/>
                                 </Grid>
