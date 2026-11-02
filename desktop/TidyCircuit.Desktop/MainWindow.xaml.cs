@@ -85,7 +85,7 @@ public partial class MainWindow : Window
             _rows.AddRange(files.OrderByDescending(f => f.Size));
             FileCountText.Text = files.Count.ToString("N0"); FolderSizeText.Text = Format(files.Sum(f => f.Size));
             ProgressText.Text = "Comparing matching files";
-            var hashProgress = new Progress<int>(count => { if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Checking duplicate content · {count:N0} files…"; });
+            var hashProgress = new Progress<int>(count => { if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Checking files · {count:N0}"; });
             var (dupes, hashErrors) = await Task.Run(() => FindDuplicates(files, token, hashProgress, _scanPauseGate));
             DuplicatesText.Text = dupes.ToString("N0");
             var errors = inventoryErrors + hashErrors;
