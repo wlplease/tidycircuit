@@ -8,6 +8,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Microsoft.VisualBasic.FileIO;
@@ -54,7 +56,8 @@ public partial class MainWindow : Window
         InitializeComponent(); FilesGrid.ItemsSource = _visibleRows;
         ChatMessagesList.ItemsSource = _chatMessages;
         LoadOrganizationUndo();
-        _chatMessages.Add(GuideChatMessage.Assistant("Hi! I can explain scans, duplicates, cleanup safety, privacy, and Windows security. I can’t inspect your PC or provide live support."));
+        _chatMessages.Add(GuideChatMessage.Assistant("Hi! I can help with scans, file review, cleanup, duplicates, and privacy. I can’t see your files, but I can walk you through the app."));
+        ContentRendered += (_, _) => ShowFirstRunGuide();
         FilesGrid.Sorting += FilesGrid_Sorting;
         UpdateSortIndicators();
         _searchDebounce.Tick += async (_, _) => { _searchDebounce.Stop(); await ApplyCurrentFiltersAsync(); };
@@ -93,25 +96,25 @@ public partial class MainWindow : Window
         CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Visible;
         PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
         _scanCancellation = new CancellationTokenSource(); var token = _scanCancellation.Token;
-        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleExtraCount = 0; _visibleRows.Clear(); _rows.Clear();
+        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleExtraCount = 0; _visibleRows.Clear(); _rows.Clear(); _scanBytes = 0;
         _scanComplete = false; _hashingDuplicates = false; VerifyDuplicatesButton.IsEnabled = false; UpdateMarkedSummary();
         FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "Searching…";
         StatusText.Text = "Checking common cache and temporary locations · nothing is changed"; ProgressText.Text = "Starting local search…";
+        ScanHealthText.Text = "Local inventory · recognized browser cache and older user temp files · protected system/app data excluded";
         ScanProgress.IsIndeterminate = true;
         try
         {
             var progress = new Progress<ScanInventoryProgress>(update =>
             {
                 if (!token.IsCancellationRequested && !_scanPaused) ProgressText.Text = $"Finding files · {update.Files:N0} checked · {update.CurrentFolder}";
+                if (!token.IsCancellationRequested && !_scanPaused) ScanHealthText.Text = $"Live · {update.Files:N0} entries checked · {update.Folders:N0} locations · protected paths skipped";
             });
-            var result = await Task.Run(() => FindSafeTemporaryFilesCore(token, progress, _scanPauseGate));
+            var result = await Task.Run(() => FindSafeTemporaryFilesCore(token, progress, _scanPauseGate,
+                batch => Dispatcher.Invoke(() => AppendScanBatch(batch))));
             token.ThrowIfCancellationRequested();
-            System.ComponentModel.PropertyChangedEventHandler markedChanged = FileRow_PropertyChanged;
-            foreach (var row in result.Files) row.PropertyChanged += markedChanged;
-            _rows.AddRange(result.Files.OrderByDescending(file => file.Size));
             _selectedRoot = "";
             SelectedRootText.Text = "Common locations · browser cache + older user temporary files";
-            FileCountText.Text = result.Files.Count.ToString("N0"); FolderSizeText.Text = Format(result.Files.Sum(file => file.Size));
+            FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_scanBytes);
             DuplicatesText.Text = "—";
             _smartFilter = _ => true; _limitLargestResults = false;
             _assistantSummary = "Found recognized browser cache and older user temporary files. Review each result; nothing is selected automatically.";
@@ -120,18 +123,35 @@ public partial class MainWindow : Window
             _scanComplete = true;
             await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
             StatusText.Text = result.Errors == 0
-                ? $"Found {result.Files.Count:N0} files · browser cache + user temp files idle 7+ days · nothing changed"
-                : $"Found {result.Files.Count:N0} files · {result.Errors:N0} read issue(s) · nothing changed";
+                ? $"Found {result.Count:N0} files · browser cache + user temp files idle 7+ days · nothing changed"
+                : $"Found {result.Count:N0} files · {result.Errors:N0} read issue(s) · nothing changed";
+            ScanHealthText.Text = result.Errors == 0
+                ? $"Scan complete · {result.Locations:N0} locations checked · no access issues"
+                : $"Scan complete · {result.Locations:N0} locations checked · {result.Errors:N0} read/access issue(s) · protected paths skipped";
         }
         catch (OperationCanceledException)
         {
-            _rows.Clear(); _visibleRows.Clear(); FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "—";
-            StatusText.Text = "Search canceled · no files were changed"; SelectedRootText.Text = "No folder selected";
+            MarkDuplicateCandidates(_rows);
+            FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_scanBytes);
+            DuplicatesText.Text = $"{_rows.Count(row => row.SizeCandidate):N0} candidates";
+            SelectedRootText.Text = "Common locations · partial results";
+            _assistantSummary = "Partial cache/temp results are shown for review. Finish a complete search to enable cleanup.";
+            _scanComplete = false;
+            await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
+            StatusText.Text = $"Search canceled · {_rows.Count:N0} partial files kept · nothing changed";
+            ScanHealthText.Text = $"Partial results · {_rows.Count:N0} files kept · scan canceled safely · no files changed";
         }
         catch (Exception ex)
         {
-            _rows.Clear(); _visibleRows.Clear(); FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "—";
-            StatusText.Text = "Temporary file search failed · " + ex.Message;
+            MarkDuplicateCandidates(_rows);
+            FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_scanBytes);
+            DuplicatesText.Text = $"{_rows.Count(row => row.SizeCandidate):N0} candidates";
+            SelectedRootText.Text = "Common locations · partial results";
+            _assistantSummary = "Partial cache/temp results are shown for review. Finish a complete search to enable cleanup.";
+            _scanComplete = false;
+            await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
+            StatusText.Text = $"Temporary file search stopped · {_rows.Count:N0} partial files kept · {ex.Message}";
+            ScanHealthText.Text = $"Partial results kept · {ex.GetType().Name} · no files changed";
         }
         finally
         {
@@ -154,11 +174,12 @@ public partial class MainWindow : Window
         _smartFilter = _ => true; _limitLargestResults = false;
         _searchDebounce.Stop(); SearchBox.Text = SearchHint; ViewFilterBox.SelectedIndex = 0; FolderFilterBox.SelectedIndex = 0;
         SearchBox.IsEnabled = ViewFilterBox.IsEnabled = FolderFilterBox.IsEnabled = SortBox.IsEnabled = false;
-        SelectAllButton.IsEnabled = ClearSelectionButton.IsEnabled = VerifyDuplicatesButton.IsEnabled = false;
+        VerifyDuplicatesButton.IsEnabled = false;
         MainTabs.SelectedIndex = 2; SetActiveNavigation(); UpdateMarkedSummary();
         FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "Scanning…";
         ProgressText.Text = "Reading file list";
         StatusText.Text = "Scanning selected folder · nothing is changed"; ScanProgress.IsIndeterminate = true;
+        ScanHealthText.Text = "Live inventory · linked folders skipped · Windows and protected application locations are blocked from cleanup";
         try
         {
             var inventoryProgress = new Progress<ScanInventoryProgress>(update =>
@@ -167,6 +188,7 @@ public partial class MainWindow : Window
                 {
                     ProgressText.Text = $"Reading {update.Files:N0} files · {update.Folders:N0} folders · {update.CurrentFolder}";
                     StatusText.Text = $"Scanning · {_rows.Count:N0} files found · nothing is changed";
+                    ScanHealthText.Text = $"Live · {update.Files:N0} entries checked · {update.Folders:N0} folders visited · partial results shown below";
                 }
             });
             var (files, inventoryErrors) = await Task.Run(() => ReadFiles(root, token, inventoryProgress, _scanPauseGate,
@@ -182,6 +204,9 @@ public partial class MainWindow : Window
             StatusText.Text = inventoryErrors == 0
                 ? $"Scan complete · {files.Count:N0} files · {candidates:N0} same-size candidates · contents not hashed"
                 : $"Scan complete with {inventoryErrors:N0} read issue(s) · {files.Count:N0} files · some files could not be read";
+            ScanHealthText.Text = inventoryErrors == 0
+                ? $"Scan complete · {files.Count:N0} files · no access issues · Windows/system folders and linked paths are skipped"
+                : $"Scan complete · {files.Count:N0} files · {inventoryErrors:N0} read/access issue(s) · protected paths skipped";
             await ApplyCurrentFiltersAsync();
             await ApplySmartQueryAsync(); UpdateMarkedSummary();
         }
@@ -190,17 +215,21 @@ public partial class MainWindow : Window
             MarkDuplicateCandidates(_rows);
             FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_scanBytes);
             DuplicatesText.Text = $"{_rows.Count(row => row.SizeCandidate):N0} candidates";
+            _assistantSummary = "Scan stopped early. These partial files are kept for review; scan again to refresh the full folder.";
             await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
             SelectedRootText.Text = root + " · partial results";
             StatusText.Text = $"Scan canceled · {_rows.Count:N0} partial files kept · no files changed";
+            ScanHealthText.Text = $"Partial results · {_rows.Count:N0} files kept · scan canceled safely · no files changed";
         }
         catch (Exception ex)
         {
             MarkDuplicateCandidates(_rows);
             FileCountText.Text = _rows.Count.ToString("N0"); FolderSizeText.Text = Format(_scanBytes);
             DuplicatesText.Text = $"{_rows.Count(row => row.SizeCandidate):N0} candidates";
+            _assistantSummary = "Scan stopped early. These partial files are kept for review; scan again to refresh the full folder.";
             await ApplyCurrentFiltersAsync(); UpdateMarkedSummary();
             StatusText.Text = $"Scan stopped · {_rows.Count:N0} partial files kept · {ex.Message}";
+            ScanHealthText.Text = $"Partial results kept · {ex.GetType().Name} · no files changed";
         }
         finally
         {
@@ -236,47 +265,56 @@ public partial class MainWindow : Window
         if (_cleanupCancellation is not null) { _cleanupCancellation.Cancel(); ProgressText.Text = "Stopping cleanup…"; return; }
         _scanCancellation?.Cancel(); _scanPauseGate.Set(); ProgressText.Text = "Stopping scan…";
     }
-    private static (List<FileRow> Files, int Errors) ReadFiles(string root, CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate, Action<IReadOnlyList<FileRow>>? onBatch = null)
+    private static (List<FileRow> Files, int Errors) ReadFiles(string root, CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate, Action<IReadOnlyList<FileRow>>? onBatch = null, bool collectFiles = true)
     {
-        var files = new List<FileRow>(); var batch = new List<FileRow>(128); var errors = 0; var folders = 0; var currentFolder = root;
+        var files = new List<FileRow>(); var batch = new List<FileRow>(128); var errors = 0; var folders = 0; var processed = 0; var currentFolder = root;
         var options = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = FileAttributes.ReparsePoint };
         var pending = new Stack<string>(); pending.Push(root);
-        while (pending.Count > 0)
+        try
         {
-            token.ThrowIfCancellationRequested();
-            pauseGate.Wait(token);
-            var dir = pending.Pop();
-            currentFolder = Path.GetFileName(dir);
-            if (string.IsNullOrWhiteSpace(currentFolder)) currentFolder = dir;
-            progress.Report(new(files.Count, ++folders, currentFolder));
-            try { foreach (var child in Directory.EnumerateDirectories(dir, "*", options)) { token.ThrowIfCancellationRequested(); pauseGate.Wait(token); pending.Push(child); } }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors++; }
-            try
+            while (pending.Count > 0)
             {
-                foreach (var path in Directory.EnumerateFiles(dir, "*", options))
+                token.ThrowIfCancellationRequested();
+                pauseGate.Wait(token);
+                var dir = pending.Pop();
+                currentFolder = Path.GetFileName(dir);
+                if (string.IsNullOrWhiteSpace(currentFolder)) currentFolder = dir;
+                progress.Report(new(processed, ++folders, currentFolder));
+                try { foreach (var child in Directory.EnumerateDirectories(dir, "*", options)) { token.ThrowIfCancellationRequested(); pauseGate.Wait(token); pending.Push(child); } }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors++; }
+                try
                 {
-                    token.ThrowIfCancellationRequested();
-                    pauseGate.Wait(token);
-                    try
+                    foreach (var path in Directory.EnumerateFiles(dir, "*", options))
                     {
-                        var info = new FileInfo(path);
-                        var row = new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = Path.GetRelativePath(root, info.FullName), ScanRoot = root, Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension };
-                        files.Add(row); batch.Add(row);
-                        if (batch.Count >= 128) { onBatch?.Invoke(batch.ToArray()); batch.Clear(); }
+                        token.ThrowIfCancellationRequested();
+                        pauseGate.Wait(token);
+                        try
+                        {
+                            var info = new FileInfo(path);
+                            var row = new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = Path.GetRelativePath(root, info.FullName), ScanRoot = root, Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension };
+                            if (collectFiles) files.Add(row);
+                            batch.Add(row); processed++;
+                            if (batch.Count >= 128) { onBatch?.Invoke(batch.ToArray()); batch.Clear(); }
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
+                        if (processed % 500 == 0) progress.Report(new(processed, folders, currentFolder));
                     }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
-                    if (files.Count % 500 == 0) progress.Report(new(files.Count, folders, currentFolder));
                 }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
+        }
+        catch (OperationCanceledException)
+        {
+            if (batch.Count > 0) onBatch?.Invoke(batch.ToArray());
+            throw;
         }
         if (batch.Count > 0) onBatch?.Invoke(batch.ToArray());
-        if (!token.IsCancellationRequested) progress.Report(new(files.Count, folders, currentFolder));
+        if (!token.IsCancellationRequested) progress.Report(new(processed, folders, currentFolder));
         return (files, errors);
     }
-    private static TemporaryFindResult FindSafeTemporaryFilesCore(CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate)
+    private static TemporaryFindResult FindSafeTemporaryFilesCore(CancellationToken token, IProgress<ScanInventoryProgress> progress, ManualResetEventSlim pauseGate, Action<IReadOnlyList<FileRow>>? onBatch = null)
     {
-        var candidates = new List<FileRow>(); var errors = 0; var locations = 0; var checkedFiles = 0;
+        var candidates = 0; var errors = 0; var locations = 0; var checkedFiles = 0;
         var cacheRoots = new List<string>();
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         void AddProfiles(string userDataRoot)
@@ -318,16 +356,21 @@ public partial class MainWindow : Window
             var offset = checkedFiles;
             var nestedProgress = new InlineProgress<ScanInventoryProgress>(update =>
                 progress.Report(new(offset + update.Files, locations + update.Folders, "Browser cache · " + update.CurrentFolder)));
-            var (files, readErrors) = ReadFiles(root, token, nestedProgress, pauseGate);
-            errors += readErrors;
-            foreach (var row in files)
+            var (files, readErrors) = ReadFiles(root, token, nestedProgress, pauseGate, batch =>
             {
-                token.ThrowIfCancellationRequested(); pauseGate.Wait(token); checkedFiles++; row.ScanRoot = root;
-                if (RecycleBlockReason(row, root) is null) candidates.Add(row);
+                var accepted = new List<FileRow>();
+                foreach (var row in batch)
+                {
+                    row.ScanRoot = root;
+                    if (RecycleBlockReason(row, root) is null) { candidates++; accepted.Add(row); }
+                    checkedFiles++;
+                }
+                if (accepted.Count > 0) onBatch?.Invoke(accepted);
                 if (checkedFiles % 250 == 0) progress.Report(new(checkedFiles, locations, "Checking browser cache files"));
-            }
+            }, collectFiles: false);
+            errors += readErrors;
         }
-        var tempRoot = Path.GetFullPath(Path.GetTempPath());
+        var tempRoot = Path.GetFullPath(Path.GetTempPath()); var tempBatch = new List<FileRow>(64);
         if (Directory.Exists(tempRoot))
         {
             locations++;
@@ -340,14 +383,21 @@ public partial class MainWindow : Window
                     {
                         var info = new FileInfo(path);
                         var row = new FileRow { Name = info.Name, FullPath = info.FullName, RelativePath = info.Name, ScanRoot = tempRoot, Size = info.Length, Modified = info.LastWriteTime, Type = info.Extension };
-                        if (IsRecognizedUserTempFile(row) && RecycleBlockReason(row, tempRoot) is null) candidates.Add(row);
+                        if (IsRecognizedUserTempFile(row) && RecycleBlockReason(row, tempRoot) is null) { candidates++; tempBatch.Add(row); }
+                        if (tempBatch.Count >= 64) { onBatch?.Invoke(tempBatch.ToArray()); tempBatch.Clear(); }
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
                     if (checkedFiles % 250 == 0) progress.Report(new(checkedFiles, locations, "Checking older temporary files"));
                 }
             }
+            catch (OperationCanceledException)
+            {
+                if (tempBatch.Count > 0) onBatch?.Invoke(tempBatch.ToArray());
+                throw;
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { errors++; }
         }
+        if (tempBatch.Count > 0) onBatch?.Invoke(tempBatch.ToArray());
         progress.Report(new(checkedFiles, locations, "Search complete"));
         return new TemporaryFindResult(candidates, locations, errors);
     }
@@ -480,6 +530,7 @@ public partial class MainWindow : Window
                     var row = snapshot[index];
                     var viewMatches = selectedView switch
                     {
+                        "Selected only" => row.Marked,
                         "Large · 100 MB+" => row.Size >= 100L * 1024 * 1024,
                         "Older · 6 months+" => row.AgeDays >= 183,
                         "Duplicates · verified" => row.Duplicate,
@@ -735,19 +786,19 @@ public partial class MainWindow : Window
             : normalized.Contains("duplicate") || normalized.Contains("copy") || normalized.Contains("hash") ? "duplicates"
             : normalized.Contains("clean") || normalized.Contains("cache") || normalized.Contains("temporary") || normalized.Contains("delete") || normalized.Contains("remove") ? "cleanup"
             : normalized.Contains("virus") || normalized.Contains("malware") || normalized.Contains("defender") || normalized.Contains("security") ? "security"
-            : normalized.Contains("ram") || normalized.Contains("battery") || normalized.Contains("health") ? "health"
+            : normalized.Contains("ram") || normalized.Contains("battery") || normalized.Contains("health") || normalized.Contains("storage") || normalized.Contains("system details") ? "health"
             : normalized.Contains("sort") || normalized.Contains("organ") || normalized.Contains("folder") || normalized.Contains("file") ? "organize"
             : normalized.Contains("it") || normalized.Contains("that") || normalized.Contains("more") || normalized.Contains("how") ? _lastGuideTopic
             : "";
         var answer = topic switch
         {
-            "privacy" => "Scans and searches run locally. TidyCircuit does not upload file lists or hashes. Exported reports and the operation log stay on your PC.",
-            "duplicates" => "Same-size files are compared with SHA-256. Verified groups label one keep candidate and the identical extras. Nothing is selected automatically; review paths before using Recycle Bin.",
-            "cleanup" => "Find temporary files checks recognized Chrome, Edge, Brave, and Firefox caches plus direct .tmp/.temp files in your user Temp folder that are at least 7 days old. You review and confirm. Windows and arbitrary app caches are excluded.",
-            "security" => "TidyCircuit does not detect malware. Open Windows Security and run a Microsoft Defender scan there.",
-            "health" => "TidyCircuit does not read live RAM, battery, or full PC health data. Use Windows Settings or Task Manager for those details.",
-            "organize" => "Review files can sort by name, full path, type, size, age, copy role, and modified date. You decide what to move; nothing is automatically reorganized.",
-            _ => "I have built-in guidance for scans, cleanup scope, duplicates, privacy, sorting, and Windows Security. I can’t inspect your PC or answer questions outside TidyCircuit. Try one of those topics."
+            "privacy" => "Your scans stay on this PC. File names and hashes aren’t uploaded. If you export a report or move files, those details stay in the locations Windows shows you.",
+            "duplicates" => "I first group files with the same size, then compare their contents with SHA-256 when you choose Verify. Exact matches are labeled for review; the app never picks files to remove on its own.",
+            "cleanup" => "Find temporary files looks for supported browser cache files and older .tmp/.temp files in your user Temp folder. You can review the paths and confirm a move to Recycle Bin. It doesn’t clear Windows or general app caches.",
+            "security" => "I can’t check for viruses. TidyCircuit can open Windows Security, where Microsoft Defender can run the scan.",
+            "health" => "Open System details and choose Refresh for Windows-reported RAM, battery, and fixed-drive readings. They’re read-only snapshots, not a full PC health diagnosis.",
+            "organize" => "In Review files, click a column title to sort, or use search and filters to narrow the list. Select the files you want, then preview an organization move before confirming it.",
+            _ => "I can help with finding files, duplicates, cleanup, privacy, or Windows Security. What are you trying to do?"
         };
         if (!string.IsNullOrEmpty(topic)) _lastGuideTopic = topic;
         _chatMessages.Add(GuideChatMessage.Assistant(answer));
@@ -915,16 +966,54 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or NotSupportedException) { return false; }
     }
+    private void ShowFirstRunGuide()
+    {
+        var guideFlag = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyCircuit", "welcome-seen-v1");
+        try { if (File.Exists(guideFlag)) return; } catch (IOException) { }
+        var dialog = new Window
+        {
+            Owner = this, Title = "Welcome to TidyCircuit", Width = 540, SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
+            Background = System.Windows.Media.Brushes.White, ShowInTaskbar = false
+        };
+        var content = new StackPanel { Margin = new Thickness(26) };
+        content.Children.Add(new TextBlock { Text = "A calm, local file review", FontSize = 24, FontWeight = FontWeights.SemiBold, Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#143E50")! });
+        content.Children.Add(new TextBlock { Text = "Choose a folder to review large, old, or duplicate files, or scan recognized browser cache and older user temporary files.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#45616A")! });
+        content.Children.Add(new TextBlock { Text = "Your scan stays on this PC. Windows and protected application folders, linked paths, and system files are blocked from cleanup. Nothing is selected or changed automatically. Confirmed file cleanup moves eligible files to the Recycle Bin.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#45616A")! });
+        content.Children.Add(new TextBlock { Text = "TidyCircuit does not detect malware or tune PC settings. Use Windows Security for threat scans.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 18), Foreground = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#8B5D32")! });
+        var button = new Button { Content = "Got it · show me around", IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right, Background = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#087D86")!, Foreground = System.Windows.Media.Brushes.White };
+        button.Click += (_, _) => dialog.DialogResult = true; content.Children.Add(button); dialog.Content = content;
+        if (dialog.ShowDialog() == true)
+        {
+            try { Directory.CreateDirectory(Path.GetDirectoryName(guideFlag)!); File.WriteAllText(guideFlag, DateTime.UtcNow.ToString("O"), new UTF8Encoding(false)); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
     private void UpdateMarkedSummary()
     {
         if (ReviewCountText is null) return;
         var marked = _rows.Count(row => row.Marked);
         var markedBytes = _rows.Where(row => row.Marked).Sum(row => Math.Max(0, row.Size));
-        ReviewCountText.Text = $"{FilesGrid.Items.Count:N0} shown · {marked:N0} selected · {Format(markedBytes)}";
+        var shownMarked = FilesGrid.Items.OfType<FileRow>().Count(row => row.Marked);
+        ReviewCountText.Text = $"{FilesGrid.Items.Count:N0} shown · {shownMarked:N0} selected here · {marked:N0} selected overall · {Format(markedBytes)}";
         if (OverviewMarkedText is not null) OverviewMarkedText.Text = $"{marked:N0} · {Format(markedBytes)}";
+        if (ReviewTrayText is not null) ReviewTrayText.Text = $"Review tray · {marked:N0} file(s) · {Format(markedBytes)} · {shownMarked:N0} visible";
+        if (ReviewTrayButton is not null) ReviewTrayButton.IsEnabled = marked > 0;
         if (RecycleButton is not null) RecycleButton.IsEnabled = marked > 0 && _scanComplete;
         if (SelectVisibleExtrasButton is not null) SelectVisibleExtrasButton.IsEnabled = _visibleExtraCount > 0;
         if (SelectAllButton is not null) SelectAllButton.Content = $"Select all shown ({FilesGrid.Items.Count:N0})";
+    }
+    private void ReviewSelected_Click(object sender, RoutedEventArgs e)
+    {
+        MainTabs.SelectedIndex = 2; SetActiveNavigation();
+        if (ViewFilterBox is not null) ViewFilterBox.SelectedItem = ViewFilterBox.Items.OfType<ComboBoxItem>().FirstOrDefault(item => item.Content?.ToString() == "Selected only");
+        StatusText.Text = $"Reviewing {_rows.Count(row => row.Marked):N0} selected file(s) across all filters · selection retained";
+    }
+    private void ClearAllSelection_Click(object sender, RoutedEventArgs e)
+    {
+        SetMarks(_rows, false);
+        StatusText.Text = "Selection cleared across all results · no files changed";
     }
     private void FileRow_PropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -958,11 +1047,10 @@ public partial class MainWindow : Window
     }
     private void ClearMarks_Click(object sender, RoutedEventArgs e) => SetMarks(FilesGrid.Items.OfType<FileRow>(), false);
     private static string OperationLogPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyCircuit", "operations.jsonl");
-    private static void WriteOperation(string action, FileRow row, string result)
+    private static void WriteOperation(StreamWriter writer, string action, FileRow row, string result)
     {
-        var path = OperationLogPath; Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var entry = JsonSerializer.Serialize(new { timeUtc = DateTime.UtcNow, action, path = row.FullPath, bytes = row.Size, result });
-        File.AppendAllText(path, entry + Environment.NewLine, new UTF8Encoding(false));
+        writer.WriteLine(entry);
     }
     private static string? RecycleBlockReason(FileRow row, string root)
     {
@@ -1006,6 +1094,60 @@ public partial class MainWindow : Window
             .OrderByDescending(group => group.Count())
             .Take(3)
             .Select(group => $"• {group.Count():N0} {group.Key} (example: {Path.GetFileName(group.First().Row.FullPath)})"));
+    private bool ConfirmRecycleSelection(IReadOnlyList<FileRow> eligible, long totalBytes, string safetyNotes)
+    {
+        var dialog = new Window
+        {
+            Owner = this,
+            Title = "Review files before cleanup",
+            Width = 820,
+            Height = 580,
+            MinWidth = 620,
+            MinHeight = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.CanResize,
+            Background = System.Windows.Media.Brushes.White,
+            ShowInTaskbar = false
+        };
+        var layout = new Grid { Margin = new Thickness(18) };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var summary = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        summary.Children.Add(new TextBlock { Text = $"Move {eligible.Count:N0} files · {Format(totalBytes)}", FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = System.Windows.Media.Brushes.DarkSlateGray });
+        summary.Children.Add(new TextBlock { Text = "Review every full path below. Nothing moves until you confirm.", Margin = new Thickness(0, 4, 0, 0), Foreground = System.Windows.Media.Brushes.DimGray });
+        Grid.SetRow(summary, 0); layout.Children.Add(summary);
+        var preview = new DataGrid
+        {
+            ItemsSource = eligible.OrderBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase).ToList(),
+            AutoGenerateColumns = false,
+            IsReadOnly = true,
+            CanUserAddRows = false,
+            CanUserSortColumns = true,
+            EnableRowVirtualization = true,
+            RowHeight = 34,
+            HeadersVisibility = DataGridHeadersVisibility.Column,
+            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+            SelectionMode = DataGridSelectionMode.Single
+        };
+        preview.Columns.Add(new DataGridTextColumn { Header = "FULL PATH", Binding = new Binding(nameof(FileRow.FullPath)), Width = new DataGridLength(1, DataGridLengthUnitType.Star), MinWidth = 350 });
+        preview.Columns.Add(new DataGridTextColumn { Header = "SIZE", Binding = new Binding(nameof(FileRow.SizeDisplay)), Width = new DataGridLength(100), MinWidth = 80 });
+        Grid.SetRow(preview, 1); layout.Children.Add(preview);
+        if (!string.IsNullOrWhiteSpace(safetyNotes))
+        {
+            var notes = new TextBlock { Text = safetyNotes, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Foreground = System.Windows.Media.Brushes.DimGray, MaxHeight = 76 };
+            Grid.SetRow(notes, 2); layout.Children.Add(notes);
+        }
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, MinWidth = 92, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(14, 8, 14, 8) };
+        var confirm = new Button { Content = "Move to Recycle Bin", IsDefault = true, MinWidth = 160, Padding = new Thickness(14, 8, 14, 8), Background = System.Windows.Media.Brushes.DarkSlateGray, Foreground = System.Windows.Media.Brushes.White };
+        confirm.Click += (_, _) => dialog.DialogResult = true;
+        buttons.Children.Add(cancel); buttons.Children.Add(confirm);
+        Grid.SetRow(buttons, 3); layout.Children.Add(buttons);
+        dialog.Content = layout;
+        return dialog.ShowDialog() == true;
+    }
     private async void RecycleMarked_Click(object sender, RoutedEventArgs e)
     {
         var marked = _rows.Where(r => r.Marked).ToList(); if (marked.Count == 0) return;
@@ -1039,11 +1181,12 @@ public partial class MainWindow : Window
         var total = eligible.Sum(row => row.Size);
         var cacheOnly = eligible.All(row => IsRecognizedBrowserCacheFile(row.FullPath));
         var oldTempOnly = eligible.All(IsRecognizedUserTempFile);
-        var skipNote = blocked.Count > 0 ? $"\n\n{blocked.Count:N0} protected, changed, or unsupported file(s) will be skipped and stay selected:\n{DescribeBlockedItems(blocked)}" : "";
-        var cacheNote = cacheOnly ? "\n\nThese are recognized temporary browser cache files only. Browser pages may reload or cache may be rebuilt. Cookies, history, saved passwords, and bookmarks are not included." : "";
-        var tempNote = oldTempOnly ? "\n\nThese are only .tmp/.temp files in your user Temp folder that have not changed for at least 7 days." : "";
-        var answer = MessageBox.Show($"Move {eligible.Count:N0} eligible selected file(s) ({Format(total)}) to the Windows Recycle Bin?{skipNote}{cacheNote}{tempNote}\n\nTidyCircuit asks Windows to recycle them. Recovery depends on your Windows and drive settings; verify the files appear in Recycle Bin before relying on recovery. Their paths will be recorded locally in the operation log.", "Confirm recoverable cleanup", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        if (answer != MessageBoxResult.Yes) { StatusText.Text = "Cleanup canceled · no files changed"; return; }
+        var notes = new List<string>();
+        if (blocked.Count > 0) notes.Add($"{blocked.Count:N0} protected, changed, or unsupported file(s) will be skipped and stay selected: {DescribeBlockedItems(blocked)}");
+        if (cacheOnly) notes.Add("Browser cache only. Pages may reload or rebuild cache; cookies, history, saved passwords, and bookmarks are not included.");
+        if (oldTempOnly) notes.Add("Only .tmp/.temp files in your user Temp folder that have not changed for at least 7 days.");
+        notes.Add("Windows Recycle Bin recovery depends on drive settings. Verify the files appear there before relying on recovery. Paths are recorded in the local operation log.");
+        if (!ConfirmRecycleSelection(eligible, total, string.Join("\n", notes))) { StatusText.Text = "Cleanup canceled · no files changed"; return; }
         ScanButton.IsEnabled = FolderButton.IsEnabled = RecycleButton.IsEnabled = false;
         MainTabs.IsEnabled = FilesGrid.IsEnabled = SelectAllButton.IsEnabled = ClearSelectionButton.IsEnabled = false;
         PauseScanButton.Visibility = Visibility.Collapsed;
@@ -1071,6 +1214,11 @@ public partial class MainWindow : Window
                 MessageBox.Show($"Cleanup stopped after handling {result.Moved.Count:N0} file(s). Could not move {result.StoppedOn}.\n\nCheck the Recycle Bin for files already moved.", "Cleanup stopped", MessageBoxButton.OK, MessageBoxImage.Warning);
             else if (result.Cancelled)
                 StatusText.Text = $"Cleanup canceled · moved {result.Moved.Count:N0} file(s) · remaining files were not changed";
+            else if (result.Moved.Count > 0 && MessageBox.Show($"Moved {result.Moved.Count:N0} file(s) to the Recycle Bin. To recover one, open the Recycle Bin, right-click the file, and choose Restore.\n\nOpen the Recycle Bin now?", "Cleanup complete", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+            {
+                try { Process.Start(new ProcessStartInfo("explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true }); }
+                catch (Exception ex) { MessageBox.Show($"Could not open the Recycle Bin. Open it from the desktop or File Explorer. {ex.Message}", "Recycle Bin", MessageBoxButton.OK, MessageBoxImage.Information); }
+            }
         }
         catch (Exception ex)
         {
@@ -1087,47 +1235,138 @@ public partial class MainWindow : Window
             UpdateMarkedSummary();
         }
     }
+    private const int RecycleBatchSize = 32;
+    private const uint FoDelete = 3;
+    private const ushort FofSilent = 0x0004;
+    private const ushort FofNoConfirmation = 0x0010;
+    private const ushort FofAllowUndo = 0x0040;
+    private const ushort FofNoErrorUi = 0x0400;
+    private const ushort FofNoConfirmMkdir = 0x0200;
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ShellFileOperation
+    {
+        public IntPtr Window;
+        public uint Function;
+        public IntPtr From;
+        public IntPtr To;
+        public ushort Flags;
+        [MarshalAs(UnmanagedType.Bool)] public bool AnyOperationsAborted;
+        public IntPtr NameMappings;
+        public IntPtr ProgressTitle;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHFileOperationW")]
+    private static extern int SHFileOperationW(ref ShellFileOperation operation);
+    private static int QueueRecycleBatch(IReadOnlyList<FileRow> rows, out bool aborted)
+    {
+        var multiString = string.Join('\0', rows.Select(row => Path.GetFullPath(row.FullPath))) + "\0\0";
+        var bytes = Encoding.Unicode.GetBytes(multiString);
+        var source = Marshal.AllocHGlobal(bytes.Length);
+        try
+        {
+            Marshal.Copy(bytes, 0, source, bytes.Length);
+            var operation = new ShellFileOperation
+            {
+                Function = FoDelete,
+                From = source,
+                Flags = (ushort)(FofSilent | FofNoConfirmation | FofAllowUndo | FofNoErrorUi | FofNoConfirmMkdir)
+            };
+            var result = SHFileOperationW(ref operation);
+            aborted = operation.AnyOperationsAborted;
+            return result;
+        }
+        finally { Marshal.FreeHGlobal(source); }
+    }
+    private static bool SourceStillExists(string path)
+    {
+        try { _ = File.GetAttributes(path); return true; }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        catch { return true; }
+    }
     private static CleanupResult RecycleEligibleFiles(List<FileRow> eligible, string root, CancellationToken token, IProgress<(int Done, int Total, string Name)> progress)
     {
-        var moved = new List<FileRow>(); var skipped = 0; var logWarning = false; string? stoppedOn = null;
-        for (var index = 0; index < eligible.Count; index++)
+        var moved = new List<FileRow>(); var skipped = 0; var logWarning = false; string? stoppedOn = null; var completed = 0;
+        var logPath = OperationLogPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+        using var log = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.Read, 64 * 1024), new UTF8Encoding(false), 64 * 1024);
+        void Report(FileRow row) => progress.Report((completed, eligible.Count, Path.GetFileName(row.FullPath)));
+        void TryLog(string action, FileRow row, string result)
         {
-            if (token.IsCancellationRequested) break;
-            var row = eligible[index]; var name = Path.GetFileName(row.FullPath);
-            try
+            try { WriteOperation(log, action, row, result); }
+            catch { logWarning = true; }
+        }
+        var offset = 0;
+        while (offset < eligible.Count && !token.IsCancellationRequested && stoppedOn is null)
+        {
+            var batch = new List<FileRow>(RecycleBatchSize);
+            while (offset < eligible.Count && batch.Count < RecycleBatchSize && !token.IsCancellationRequested)
             {
+                var row = eligible[offset++];
                 var changedReason = RecycleBlockReason(row, string.IsNullOrWhiteSpace(row.ScanRoot) ? root : row.ScanRoot);
-                if (changedReason is not null)
+                if (changedReason is null) { batch.Add(row); continue; }
+                skipped++; completed++; TryLog("recycle", row, "skipped: " + changedReason); Report(row);
+            }
+            if (batch.Count == 0 || token.IsCancellationRequested) continue;
+
+            var volumeGroups = batch.GroupBy(row => Path.GetPathRoot(row.FullPath) ?? "", StringComparer.OrdinalIgnoreCase);
+            foreach (var volumeGroup in volumeGroups)
+            {
+                if (token.IsCancellationRequested || stoppedOn is not null) break;
+                var group = volumeGroup.ToList();
+                try
                 {
-                    skipped++;
-                    try { WriteOperation("recycle", row, "skipped: " + changedReason); } catch { logWarning = true; }
+                    foreach (var row in group) WriteOperation(log, "recycle", row, "requested");
+                    log.Flush();
                 }
-                else
+                catch (Exception)
                 {
-                    WriteOperation("recycle", row, "requested");
-                    FileSystem.DeleteFile(row.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
-                    moved.Add(row);
-                    try { WriteOperation("recycle", row, "moved"); } catch { logWarning = true; }
+                    logWarning = true; skipped += group.Count; completed += group.Count;
+                    stoppedOn = Path.GetFileName(group[0].FullPath);
+                    foreach (var row in group) Report(row);
+                    return new CleanupResult(moved, skipped, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
                 }
+
+                var shellFailed = false;
+                try
+                {
+                    var shellCode = QueueRecycleBatch(group, out var aborted);
+                    shellFailed = shellCode != 0 || aborted;
+                }
+                catch { shellFailed = true; }
+
+                foreach (var row in group)
+                {
+                    var fileStillThere = SourceStillExists(row.FullPath);
+                    if (!fileStillThere)
+                    {
+                        moved.Add(row); completed++; TryLog("recycle", row, "moved"); Report(row);
+                        continue;
+                    }
+                    if (token.IsCancellationRequested) continue;
+                    try
+                    {
+                        FileSystem.DeleteFile(row.FullPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                        moved.Add(row); TryLog("recycle", row, shellFailed ? "moved by individual fallback" : "moved");
+                    }
+                    catch (IOException) { skipped++; TryLog("recycle", row, "skipped: file unavailable or in use"); }
+                    catch (UnauthorizedAccessException) { skipped++; TryLog("recycle", row, "skipped: access denied"); }
+                    catch (Exception ex)
+                    {
+                        skipped++; logWarning |= !TryLogFailure(log, row, ex);
+                        stoppedOn ??= Path.GetFileName(row.FullPath);
+                    }
+                    completed++; Report(row);
+                    if (stoppedOn is not null) break;
+                }
+                log.Flush();
             }
-            catch (IOException)
-            {
-                skipped++;
-                try { WriteOperation("recycle", row, "skipped: file unavailable or in use"); } catch { logWarning = true; }
-            }
-            catch (UnauthorizedAccessException)
-            {
-                skipped++;
-                try { WriteOperation("recycle", row, "skipped: access denied"); } catch { logWarning = true; }
-            }
-            catch (Exception ex)
-            {
-                try { WriteOperation("recycle", row, "failed: " + ex.GetType().Name); } catch { logWarning = true; }
-                stoppedOn = name; break;
-            }
-            if ((index + 1) % 25 == 0 || index + 1 == eligible.Count) progress.Report((index + 1, eligible.Count, name));
         }
         return new CleanupResult(moved, skipped, logWarning, stoppedOn, token.IsCancellationRequested && moved.Count + skipped < eligible.Count);
+    }
+    private static bool TryLogFailure(StreamWriter log, FileRow row, Exception exception)
+    {
+        try { WriteOperation(log, "recycle", row, "failed: " + exception.GetType().Name); return true; }
+        catch { return false; }
     }
     private static string TsvField(string value)
     {
@@ -1213,7 +1452,7 @@ public sealed record GuideChatMessage(string Text, string BubbleBrush, string Te
     public static GuideChatMessage Assistant(string text) => new(text, "#EEF6F4", "#264D56", HorizontalAlignment.Left);
     public static GuideChatMessage User(string text) => new(text, "#087D86", "White", HorizontalAlignment.Right);
 }
-public sealed record TemporaryFindResult(List<FileRow> Files, int Locations, int Errors);
+public sealed record TemporaryFindResult(int Count, int Locations, int Errors);
 public sealed class InlineProgress<T>(Action<T> report) : IProgress<T> { public void Report(T value) => report(value); }
 public sealed record CleanupResult(List<FileRow> Moved, int Skipped, bool LogWarning, string? StoppedOn, bool Cancelled);
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>

@@ -86,7 +86,7 @@
                 </StackPanel>
             </Grid>
             <Border Grid.Row="1" Background="#E7F5F2" CornerRadius="10" Padding="10,8" Margin="0,0,0,12">
-                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock x:Name="StatusText" Text="Ready · Choose a folder to begin" TextTrimming="CharacterEllipsis" Foreground="#245D62" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         <ProgressBar x:Name="ScanProgress" Grid.Column="1" Width="120" Height="5" IsIndeterminate="False" Visibility="Collapsed" Foreground="#087D86" VerticalAlignment="Center" Margin="12,0,0,0"/>
@@ -99,6 +99,7 @@
                         <TextBlock x:Name="SearchProgressText" Grid.Column="1" Text="Searching…" Foreground="#638287" FontSize="10" VerticalAlignment="Center" Margin="9,0,0,0"/>
                         <Button x:Name="SearchPauseButton" Grid.Column="2" Content="Pause" Background="Transparent" Foreground="#087D86" Padding="8,3" Margin="5,0,0,0" Click="PauseSearch_Click"/>
                     </Grid>
+                    <TextBlock x:Name="ScanHealthText" Grid.Row="2" Text="Ready · scans stay in the folder or recognized cache locations you choose" Foreground="#638287" FontSize="10" Margin="1,6,0,0" TextTrimming="CharacterEllipsis"/>
                 </Grid>
             </Border>
 
@@ -143,7 +144,10 @@
                             <TextBlock Text="Start with a useful view" Foreground="#143E50" FontSize="17" FontWeight="Bold"/>
                         <TextBlock Text="Pick a folder or find temporary files in common locations. Review every result before cleanup." Foreground="#688086" FontSize="12" Margin="0,3,0,0"/>
                         </StackPanel>
-                        <UniformGrid Grid.Row="2" Columns="2" Rows="2" VerticalAlignment="Top">
+                        <UniformGrid Grid.Row="2" Columns="2" Rows="3" VerticalAlignment="Top">
+                            <Button Style="{StaticResource QuickCard}" Click="FindCaches_Click"><StackPanel>
+                                <TextBlock Text="Temporary files" FontSize="16" FontWeight="Bold"/><TextBlock Text="Review recognized browser cache and older user temp files." Foreground="#688086" FontSize="11" Margin="0,5,0,0"/>
+                            </StackPanel></Button>
                             <Button Style="{StaticResource QuickCard}" Tag="largest files" Click="QuickQuery_Click"><StackPanel>
                                 <TextBlock Text="Largest files" FontSize="16" FontWeight="Bold"/><TextBlock Text="See the 25 biggest files in this scan." Foreground="#688086" FontSize="11" Margin="0,5,0,0"/>
                             </StackPanel></Button>
@@ -204,20 +208,20 @@
                             <StackPanel><TextBlock Text="FILE REVIEW" Foreground="#143E50" FontSize="18" FontWeight="Bold"/>
                                 <TextBlock Text="Click a column title to sort. Review the full path and file details before cleanup." Foreground="#688086" FontSize="11" Margin="0,3,0,0"/>
                             </StackPanel>
-                            <TextBlock x:Name="ReviewCountText" Grid.Column="1" Text="0 shown · 0 selected" Foreground="#087D86" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="ReviewCountText" Grid.Column="1" Text="0 shown · 0 selected here · 0 selected overall" TextWrapping="Wrap" MaxWidth="460" Foreground="#087D86" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </Grid>
                         <Border Grid.Row="1" Background="White" CornerRadius="12" Padding="10" Margin="0,0,0,10">
                             <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                 <Grid Grid.Row="0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBox x:Name="SearchBox" Height="36" Padding="10,8" BorderBrush="#D6E6E5" ToolTip="Search file names, folders, extensions, or any part of a path" Text="Search names, folders, extensions…" Foreground="#829498" GotKeyboardFocus="SearchBox_GotKeyboardFocus" LostKeyboardFocus="SearchBox_LostKeyboardFocus" TextChanged="SearchBox_TextChanged"/>
                                     <ComboBox x:Name="SortBox" Grid.Column="1" Width="146" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="SortBox_SelectionChanged"><ComboBoxItem Content="Largest first"/><ComboBoxItem Content="Name A–Z"/><ComboBoxItem Content="Oldest first"/></ComboBox>
-                                    <ComboBox x:Name="ViewFilterBox" Grid.Column="2" Width="145" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="ViewFilterBox_SelectionChanged"><ComboBoxItem Content="All files"/><ComboBoxItem Content="Large · 100 MB+"/><ComboBoxItem Content="Older · 6 months+"/><ComboBoxItem Content="Duplicates · verified"/><ComboBoxItem Content="Same-size candidates"/><ComboBoxItem Content="Temporary files"/></ComboBox>
+                                    <ComboBox x:Name="ViewFilterBox" Grid.Column="2" Width="145" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="ViewFilterBox_SelectionChanged"><ComboBoxItem Content="All files"/><ComboBoxItem Content="Selected only"/><ComboBoxItem Content="Large · 100 MB+"/><ComboBoxItem Content="Older · 6 months+"/><ComboBoxItem Content="Duplicates · verified"/><ComboBoxItem Content="Same-size candidates"/><ComboBoxItem Content="Temporary files"/></ComboBox>
                                     <ComboBox x:Name="FolderFilterBox" Grid.Column="3" Width="150" Height="36" Margin="8,0,0,0" SelectedIndex="0" SelectionChanged="FolderFilterBox_SelectionChanged"><ComboBoxItem Content="All folders"/></ComboBox>
-                                    <Button x:Name="SelectAllButton" Grid.Column="4" Content="Select all shown" Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
-                                    <Button x:Name="ClearSelectionButton" Grid.Column="5" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
+                                    <Button x:Name="SelectAllButton" Grid.Column="4" Content="Select all shown" ToolTip="Select the files currently visible in this view. During a scan, files found later stay unchecked." Background="#E7F5F2" Foreground="#087D86" Margin="8,0,0,0" Click="SelectAll_Click"/>
+                                    <Button x:Name="ClearSelectionButton" Grid.Column="5" Content="Clear shown" ToolTip="Uncheck files in the current filtered view; selections hidden by filters are kept" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
                                 </Grid>
                                 <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="Selection covers only the current filtered results. Every move is checked and confirmed." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Select/Clear shown affects the visible rows. Later scan results start unchecked. Export, organize, and Recycle use all checked files." Foreground="#829498" FontSize="10" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     <Button x:Name="SelectVisibleExtrasButton" IsEnabled="False" Grid.Column="1" Content="Select visible extras" ToolTip="Select only verified extra copies shown in this view; nothing is moved" Background="#FFF4E9" Foreground="#8B5D32" Padding="12,8" Margin="0,0,7,0" Click="SelectVisibleExtras_Click"/>
                                     <Button x:Name="VerifyDuplicatesButton" IsEnabled="False" Grid.Column="2" Content="Verify same-size" Background="#E7F5F2" Foreground="#087D86" Padding="12,8" Margin="0,0,7,0" Click="VerifyDuplicates_Click"/>
                                     <Button x:Name="UndoOrganizationButton" IsEnabled="False" Grid.Column="3" Content="Undo organize" Background="Transparent" Foreground="#45616A" Padding="10,8" Margin="0,0,7,0" Click="UndoOrganization_Click"/>
@@ -230,7 +234,19 @@
                         <Border Grid.Row="2" Background="White" CornerRadius="13" Padding="9">
                             <DataGrid x:Name="FilesGrid" AutoGenerateColumns="False" IsReadOnly="False" CanUserAddRows="False" AlternationCount="2" EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True">
                                 <DataGrid.Columns>
-                                    <DataGridCheckBoxColumn Header="SELECT" Binding="{Binding Marked, UpdateSourceTrigger=PropertyChanged}" Width="55"/>
+                                    <DataGridCheckBoxColumn Header="SELECT" IsThreeState="False" Width="62">
+                                        <DataGridCheckBoxColumn.Binding>
+                                            <Binding Path="Marked" Mode="TwoWay" UpdateSourceTrigger="PropertyChanged"/>
+                                        </DataGridCheckBoxColumn.Binding>
+                                        <DataGridCheckBoxColumn.ElementStyle>
+                                            <Style TargetType="CheckBox">
+                                                <Setter Property="IsHitTestVisible" Value="True"/>
+                                                <Setter Property="Focusable" Value="False"/>
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridCheckBoxColumn.ElementStyle>
+                                    </DataGridCheckBoxColumn>
                                     <DataGridTextColumn Header="FILE NAME" SortMemberPath="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True">
                                         <DataGridTextColumn.ElementStyle><Style TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="ToolTip" Value="{Binding Name}"/></Style></DataGridTextColumn.ElementStyle>
                                     </DataGridTextColumn>
@@ -263,6 +279,7 @@
                         </Border>
                         <WrapPanel Grid.Row="2" Margin="0,10,0,7">
                             <Button Content="What can it clean?" Tag="What can it clean?" Background="White" Foreground="#087D86" Margin="0,0,7,0" Click="ChatSuggestion_Click"/>
+                            <Button Content="How do I select files?" Tag="How do I select files?" Background="White" Foreground="#087D86" Margin="0,0,7,0" Click="ChatSuggestion_Click"/>
                             <Button Content="How do duplicates work?" Tag="How do duplicates work?" Background="White" Foreground="#087D86" Margin="0,0,7,0" Click="ChatSuggestion_Click"/>
                             <Button Content="Is my data uploaded?" Tag="Is my data uploaded?" Background="White" Foreground="#087D86" Click="ChatSuggestion_Click"/>
                         </WrapPanel>
@@ -290,7 +307,13 @@
                     </StackPanel></ScrollViewer>
                 </TabItem>
             </TabControl>
-            <TextBlock Grid.Row="3" Text="Unsigned candidate · local review · no uploads · Recycle Bin only" Foreground="#829498" FontSize="10" Margin="3,9,0,0"/>
+            <Border Grid.Row="3" Background="#143E50" CornerRadius="12" Padding="12,8" Margin="0,9,0,0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ReviewTrayText" Text="Review tray · 0 files · 0 B" Foreground="White" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <Button x:Name="ReviewTrayButton" Grid.Column="1" Content="Review selected" Background="#7EE0D1" Foreground="#143E50" Padding="12,6" Margin="8,0,0,0" Click="ReviewSelected_Click"/>
+                    <Button Grid.Column="2" Content="Clear selection" Background="Transparent" Foreground="White" Padding="10,6" Margin="4,0,0,0" Click="ClearAllSelection_Click"/>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>
