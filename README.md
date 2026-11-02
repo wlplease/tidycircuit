@@ -4,7 +4,7 @@
 
 **Make room. Keep control.** TidyCircuit is a local Windows file review and organization app. It helps people understand a chosen folder, identify exact duplicates, and make deliberate, recoverable changes.
 
-[Download 0.2.0 Release Candidate (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.1/TidyCircuit-0.2.0-rc.1-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
+[Download 0.2.0 Release Candidate (unsigned)](https://github.com/wlplease/tidycircuit/releases/download/v0.2.0-rc.2/TidyCircuit-0.2.0-rc.2-win-x64.zip) · [Website](https://tidycircuit.vercel.app/) · [Source](https://github.com/wlplease/tidycircuit) · [Privacy](PRIVACY.md) · [Install / uninstall](INSTALL.md) · [Support](https://github.com/wlplease/tidycircuit/issues/new)
 
 ## What it does
 
