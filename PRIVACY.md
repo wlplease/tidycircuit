@@ -1,6 +1,6 @@
 # Privacy
 
-TidyCircuit 0.1.1 is a Windows desktop app that scans only the folder you choose.
+The public TidyCircuit 0.1.1 Windows build scans only the folder you choose. Newer cleanup features on the unreleased `main` source are described separately below.
 
 ## What the app reads
 
@@ -10,7 +10,9 @@ TidyCircuit 0.1.1 is a Windows desktop app that scans only the folder you choose
 
 ## What stays on your PC
 
-The scan list, file paths, file contents used for hashing, and hashes remain in the app process. TidyCircuit does not upload scan data, create an account, or include analytics. The app does not move or delete files. Exported review TSVs are saved only where you choose.
+The scan list, file paths, file contents used for hashing, and hashes remain in the app process. TidyCircuit does not upload scan data, create an account, or include analytics. The public 0.1.1 app does not move or delete files. Exported review TSVs are saved only where you choose.
+
+The unreleased `main` source includes local rule-based search over the chosen folder and an optional, manually confirmed move of marked items to the Windows Recycle Bin. It does not include an AI model or send file information over the network. For those recycle operations it writes the time, full file paths, byte counts, and outcomes to `%LOCALAPPDATA%\TidyCircuit\operations.jsonl`. This local log may expose private file names and paths to anyone who can access your Windows account. Deleting the app folder does not remove the log. Recycle Bin recovery depends on Windows/drive settings; verify items appear there before relying on recovery.
 
 TidyCircuit does not scan the whole PC, clean Windows or app caches, report system health, or detect malware. The Safety screen can open Windows Security, but it does not perform or report a Defender scan. Use Windows Security to start a malware scan.
 

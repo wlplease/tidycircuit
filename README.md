@@ -1,6 +1,6 @@
 # TidyCircuit
 
-**Make room. Keep control.** TidyCircuit is a Windows desktop file review app with a private, read-only scan.
+**Make room. Keep control.** TidyCircuit is a private Windows file review app. The public 0.1.1 download is read-only; newer local smart-review and recoverable cleanup work on `main` is not in that download yet.
 
 [Download TidyCircuit for Windows](https://github.com/wlplease/CleanMeScarlett/releases/latest/download/TidyCircuit-0.1.1-win-x64.zip) · [Visit the website](https://tidycircuit.vercel.app/) · [Source code](https://github.com/wlplease/CleanMeScarlett) · [Privacy](PRIVACY.md) · [Install/uninstall](INSTALL.md) · [Report a bug](https://github.com/wlplease/CleanMeScarlett/issues/new)
 
@@ -11,7 +11,7 @@
 - Verify duplicates using SHA-256 after matching file size. Files above 256 MB are skipped.
 - Run on Windows 10 or 11, x64. The ZIP contains a self-contained executable; no .NET install is required.
 
-The app only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. Use Windows Security for threat scans. It skips inaccessible and linked folders. The Safety screen only opens Windows Security; it does not perform a malware scan. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
+The 0.1.1 download only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. The unreleased `main` source adds a local rule-based finder and a manually confirmed Recycle Bin action with protected paths and a local operation log. It does not include a language model or upload scan data. Use Windows Security for malware scans. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
 
 ## Install
 
@@ -25,6 +25,6 @@ dotnet publish desktop/TidyCircuit.Desktop/TidyCircuit.Desktop.csproj -c Release
 
 ## Safety and privacy
 
-Scans remain on the PC. Duplicate hashes are calculated locally; paths and hashes are not uploaded. A duplicate is only a review clue; it is not permission to delete either copy. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the [MIT license](LICENSE).
+Scans remain on the PC. Duplicate hashes are calculated locally; paths and hashes are not uploaded. A duplicate or old/large-file suggestion is only a review clue; TidyCircuit cannot decide that a personal file is safe to remove. See [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the [MIT license](LICENSE).
 
 The app is free during early access through **December 12, 2026 at 12:12 UTC**. Existing copies remain usable after the offer ends. The website will pause new free downloads while paid access is prepared. The current GitHub release asset is public and cannot be revoked from people who already have its direct link; checkout and license enforcement are not implemented yet.

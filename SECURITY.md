@@ -1,6 +1,8 @@
 # Security
 
-TidyCircuit's Windows desktop release is a local, read-only folder review tool. It runs as the current Windows user (`asInvoker`), with no administrator request, service, startup task, or network listener. The desktop app reads names, paths, size, and modified time under the folder a person selects. It reads file contents only to hash same-size duplicate candidates at or below 256 MB. It does not delete or move scanned files, clear caches, upload scan data, or identify malware.
+The public TidyCircuit 0.1.1 Windows release is a local, read-only folder review tool. It runs as the current Windows user (`asInvoker`), with no administrator request, service, startup task, or network listener. It reads names, paths, size, and modified time under the folder a person selects; it reads file contents only to hash same-size duplicate candidates at or below 256 MB. The public build does not move or delete files, clear caches, upload scan data, or identify malware.
+
+The newer, unreleased `main` source adds a rule-based local finder and a manual action that asks Windows to move marked regular files to the Recycle Bin. It is not an AI model. It refuses protected Windows/app paths, hidden/system/read-only/linked files, app and script types, and non-fixed drives. It requires confirmation, records file paths and outcomes in `%LOCALAPPDATA%\TidyCircuit\operations.jsonl`, and depends on Windows settings for Recycle Bin recovery. Users must check the Recycle Bin before relying on recovery. It does not determine that a personal file is safe to remove.
 
 The Safety screen only offers to open Windows Security. It does not pass a file to Defender or claim to perform a scan. The System Details screen links users to Windows tools; it does not collect live RAM, battery, or drive-health readings.
 
