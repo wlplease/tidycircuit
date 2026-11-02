@@ -190,6 +190,7 @@
                             <StackPanel><TextBlock Text="SUPPORTED QUESTIONS" Foreground="#143E50" FontSize="11" FontWeight="Bold"/>
                                 <TextBlock Text="Duplicates · largest files · older files · browser cache · photos · videos · documents · audio · archives · Downloads · Desktop · file extensions such as .pdf" Foreground="#688086" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                 <TextBlock Text="Browser cache means recognized Chrome, Edge, Brave, and Firefox temporary cache files only. Review and select manually; cookies, history, passwords, and bookmarks are never included." Foreground="#688086" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                <TextBlock Text="Verified duplicate groups label one keep candidate and the exact extra copies. Nothing is selected automatically." Foreground="#688086" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
                                 <TextBlock Text="Suggestions are clues, not safety verdicts. Nothing is selected automatically." Foreground="#9B4D3B" FontSize="11" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
@@ -213,10 +214,11 @@
                                     <Button x:Name="SelectVisibleButton" Grid.Column="3" Content="Select visible" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="MarkVisible_Click"/>
                                     <Button x:Name="ClearSelectionButton" Grid.Column="4" Content="Clear selection" Background="Transparent" Foreground="#45616A" Margin="3,0,0,0" Click="ClearMarks_Click"/>
                                 </Grid>
-                                <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Text="Select all covers the scan. Select visible replaces selection with the shown results." Foreground="#829498" FontSize="10" VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1" Content="Export selected" Background="#143E50" Foreground="White" Padding="13,8" Margin="0,0,7,0" Click="Export_Click"/>
-                                    <Button x:Name="RecycleButton" IsEnabled="False" Grid.Column="2" Content="Move selected to Recycle Bin" Background="#FBECE7" Foreground="#9B4D3B" Padding="13,8" Click="RecycleMarked_Click"/>
+                                    <Button x:Name="SelectVisibleExtrasButton" IsEnabled="False" Grid.Column="1" Content="Select visible extras" ToolTip="Select only verified extra copies shown in this view; nothing is moved" Background="#FFF4E9" Foreground="#8B5D32" Padding="12,8" Margin="0,0,7,0" Click="SelectVisibleExtras_Click"/>
+                                    <Button Grid.Column="2" Content="Export selected" Background="#143E50" Foreground="White" Padding="13,8" Margin="0,0,7,0" Click="Export_Click"/>
+                                    <Button x:Name="RecycleButton" IsEnabled="False" Grid.Column="3" Content="Move selected to Recycle Bin" Background="#FBECE7" Foreground="#9B4D3B" Padding="13,8" Click="RecycleMarked_Click"/>
                                 </Grid>
                             </Grid>
                         </Border>
@@ -231,7 +233,7 @@
                                     <DataGridTextColumn Header="TYPE" SortMemberPath="Type" Binding="{Binding TypeDisplay}" Width="80" IsReadOnly="True"/>
                                     <DataGridTextColumn Header="SIZE" SortMemberPath="Size" Binding="{Binding SizeDisplay}" Width="95" IsReadOnly="True"/>
                                     <DataGridTextColumn Header="AGE" SortMemberPath="AgeDays" Binding="{Binding AgeDisplay}" Width="75" IsReadOnly="True"/>
-                                    <DataGridTextColumn Header="MATCH" SortMemberPath="Duplicate" Binding="{Binding DuplicateDisplay}" Width="105" IsReadOnly="True"/>
+                                    <DataGridTextColumn Header="COPY ROLE" SortMemberPath="DuplicateSort" Binding="{Binding DuplicateDisplay}" Width="170" IsReadOnly="True"/>
                                     <DataGridTextColumn Header="MODIFIED" SortMemberPath="Modified" Binding="{Binding ModifiedDisplay}" Width="135" IsReadOnly="True"/>
                                 </DataGrid.Columns>
                             </DataGrid>

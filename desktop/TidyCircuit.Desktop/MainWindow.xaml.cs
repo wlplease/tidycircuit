@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private bool _scanPaused;
     private bool _filterPaused;
     private bool _automaticScan;
+    private int _visibleExtraCount;
     private bool _syncingSort;
     private bool _limitLargestResults;
     private string _sortProperty = nameof(FileRow.Size);
@@ -80,7 +81,7 @@ public partial class MainWindow : Window
         CancelScanButton.Visibility = PauseScanButton.Visibility = ScanProgress.Visibility = Visibility.Visible;
         PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
         _scanCancellation = new CancellationTokenSource(); var token = _scanCancellation.Token;
-        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
+        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleExtraCount = 0; _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
         FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "Searching…";
         StatusText.Text = "Checking common cache and temporary locations · nothing is changed"; ProgressText.Text = "Starting local search…";
         ScanProgress.IsIndeterminate = true;
@@ -134,7 +135,7 @@ public partial class MainWindow : Window
         PauseScanButton.Content = "Pause"; _scanPaused = false; _scanPauseGate.Set();
         _scanCancellation = new CancellationTokenSource();
         var token = _scanCancellation.Token;
-        _filterCancellation?.Cancel(); _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
+        _filterCancellation?.Cancel(); _filterPauseGate.Set(); _visibleExtraCount = 0; _visibleRows.Clear(); _rows.Clear(); UpdateMarkedSummary();
         FileCountText.Text = FolderSizeText.Text = DuplicatesText.Text = "Scanning…";
         UpdateMarkedSummary();
         ProgressText.Text = "Reading file list";
@@ -304,7 +305,8 @@ public partial class MainWindow : Window
     }
     private static (int Duplicates, int Errors) FindDuplicates(List<FileRow> files, CancellationToken token = default, IProgress<int>? progress = null, ManualResetEventSlim? pauseGate = null)
     {
-        var count = 0; var errors = 0; var candidate = 0;
+        var count = 0; var errors = 0; var candidate = 0; var nextGroup = 0;
+        foreach (var row in files) { row.Duplicate = false; row.DuplicateExtra = false; row.DuplicateGroup = 0; }
         foreach (var sizeGroup in files.Where(f => f.Size >= 0 && f.Size <= 268_435_456).GroupBy(f => f.Size).Where(g => g.Count() > 1))
         {
             var hashes = new Dictionary<string, List<FileRow>>();
@@ -318,8 +320,15 @@ public partial class MainWindow : Window
             }
             foreach (var hashGroup in hashes.Values.Where(g => g.Count() > 1))
             {
-                foreach (var row in hashGroup) row.Duplicate = true;
-                count += hashGroup.Count() - 1;
+                var orderedGroup = hashGroup.OrderBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase).ToList();
+                var groupId = ++nextGroup;
+                count += orderedGroup.Count - 1;
+                for (var index = 0; index < orderedGroup.Count; index++)
+                {
+                    orderedGroup[index].DuplicateGroup = groupId;
+                    orderedGroup[index].Duplicate = true;
+                    orderedGroup[index].DuplicateExtra = index > 0;
+                }
             }
         }
         progress?.Report(candidate);
@@ -429,14 +438,14 @@ public partial class MainWindow : Window
                     nameof(FileRow.FullPath) => sortDescending ? found.OrderByDescending(row => row.FullPath, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase),
                     nameof(FileRow.Type) => sortDescending ? found.OrderByDescending(row => row.Type, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Type, StringComparer.OrdinalIgnoreCase),
                     nameof(FileRow.AgeDays) => sortDescending ? found.OrderByDescending(row => row.AgeDays) : found.OrderBy(row => row.AgeDays),
-                    nameof(FileRow.Duplicate) => sortDescending ? found.OrderByDescending(row => row.Duplicate).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Duplicate).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase),
+                    nameof(FileRow.DuplicateSort) => sortDescending ? found.OrderByDescending(row => row.DuplicateSort).ThenBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.DuplicateSort).ThenBy(row => row.FullPath, StringComparer.OrdinalIgnoreCase),
                     nameof(FileRow.Modified) => sortDescending ? found.OrderByDescending(row => row.Modified) : found.OrderBy(row => row.Modified),
                     _ => sortDescending ? found.OrderByDescending(row => row.Size).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase) : found.OrderBy(row => row.Size).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
                 };
                 return largestOnly ? ordered.Take(25).ToList() : ordered.ToList();
             }, token);
             if (token.IsCancellationRequested || request != _filterRequest) return null;
-            _visibleRows.ReplaceAll(matches);
+            _visibleRows.ReplaceAll(matches); _visibleExtraCount = matches.Count(row => row.DuplicateExtra);
             if (SearchProgressBar is not null) SearchProgressBar.Value = 100;
             if (AssistantStatus is not null)
                 AssistantStatus.Text = _assistantSummary + (term.Length > 0 ? $" · Search narrows results to {matches.Count:N0}" : "");
@@ -690,6 +699,7 @@ public partial class MainWindow : Window
         ReviewCountText.Text = $"{FilesGrid.Items.Count:N0} shown · {marked:N0} selected";
         if (OverviewMarkedText is not null) OverviewMarkedText.Text = marked.ToString("N0");
         if (RecycleButton is not null) RecycleButton.IsEnabled = marked > 0;
+        if (SelectVisibleExtrasButton is not null) SelectVisibleExtrasButton.IsEnabled = _visibleExtraCount > 0;
     }
     private void FileRow_PropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -705,9 +715,19 @@ public partial class MainWindow : Window
     private void SelectAll_Click(object sender, RoutedEventArgs e) => SetMarks(_rows, true);
     private void MarkVisible_Click(object sender, RoutedEventArgs e)
     {
-        var visible = FilesGrid.Items.OfType<FileRow>().ToHashSet();
+        ReplaceSelectionWith(FilesGrid.Items.OfType<FileRow>());
+    }
+    private void SelectVisibleExtras_Click(object sender, RoutedEventArgs e)
+    {
+        var extras = FilesGrid.Items.OfType<FileRow>().Where(row => row.DuplicateExtra).ToList();
+        ReplaceSelectionWith(extras);
+        StatusText.Text = $"Selected {extras.Count:N0} exact duplicate copies for review · nothing moved";
+    }
+    private void ReplaceSelectionWith(IEnumerable<FileRow> rows)
+    {
+        var selected = rows.ToHashSet();
         _isUpdatingMarks = true;
-        try { foreach (var row in _rows) row.Marked = visible.Contains(row); }
+        try { foreach (var row in _rows) row.Marked = selected.Contains(row); }
         finally { _isUpdatingMarks = false; }
         UpdateMarkedSummary();
     }
@@ -940,8 +960,13 @@ public sealed class FileRow : INotifyPropertyChanged
     private bool _marked;
     private bool _duplicate;
     public string Name { get; set; } = ""; public string FullPath { get; set; } = ""; public string RelativePath { get; set; } = ""; public string Type { get; set; } = ""; public string ScanRoot { get; set; } = ""; public long Size { get; set; } public DateTime Modified { get; set; }
-    public bool Duplicate { get => _duplicate; set { if (_duplicate == value) return; _duplicate = value; PropertyChanged?.Invoke(this, new(nameof(Duplicate))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); } }
-    public string DuplicateDisplay => Duplicate ? "Same content" : "—";
+    public bool Duplicate { get => _duplicate; set { if (_duplicate == value) return; _duplicate = value; PropertyChanged?.Invoke(this, new(nameof(Duplicate))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); PropertyChanged?.Invoke(this, new(nameof(DuplicateSort))); } }
+    private bool _duplicateExtra;
+    private int _duplicateGroup;
+    public bool DuplicateExtra { get => _duplicateExtra; set { if (_duplicateExtra == value) return; _duplicateExtra = value; PropertyChanged?.Invoke(this, new(nameof(DuplicateExtra))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); PropertyChanged?.Invoke(this, new(nameof(DuplicateSort))); } }
+    public int DuplicateGroup { get => _duplicateGroup; set { if (_duplicateGroup == value) return; _duplicateGroup = value; PropertyChanged?.Invoke(this, new(nameof(DuplicateGroup))); PropertyChanged?.Invoke(this, new(nameof(DuplicateDisplay))); } }
+    public int DuplicateSort => !Duplicate ? 0 : DuplicateExtra ? 2 : 1;
+    public string DuplicateDisplay => !Duplicate ? "—" : DuplicateExtra ? $"Exact extra · group {DuplicateGroup}" : $"Keep candidate · group {DuplicateGroup}";
     public string TypeDisplay => string.IsNullOrWhiteSpace(Type) ? "No extension" : Type.TrimStart('.').ToUpperInvariant();
     public int AgeDays => (DateTime.Today - Modified.Date).Days;
     public string AgeDisplay
