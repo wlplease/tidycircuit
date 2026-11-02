@@ -1,7 +1,17 @@
 # Security
 
-Please avoid posting private file names, paths, or system reports in public issues. For a potential vulnerability, use GitHub's private vulnerability reporting for this repository if enabled. If it is unavailable, open an issue that asks maintainers for a private contact channel without including exploit details.
+TidyCircuit's Windows desktop release is a local, read-only folder review tool. It runs as the current Windows user (`asInvoker`), with no administrator request, service, startup task, or network listener. The desktop app reads names, paths, size, and modified time under the folder a person selects. It reads file contents only to hash same-size duplicate candidates at or below 256 MB. It does not delete or move scanned files, clear caches, upload scan data, or identify malware.
 
-The web app analyzes user-selected folders in the browser. The Windows companion is a PowerShell script with no network listener. Its quarantine action is limited to old files in the current user's TEMP folder and requires confirmation; the operation log and quarantined contents stay in `%LOCALAPPDATA%\TidyCircuit`.
+The Safety screen only offers to open Windows Security. It does not pass a file to Defender or claim to perform a scan. The System Details screen links users to Windows tools; it does not collect live RAM, battery, or drive-health readings.
 
-Do not run scripts from untrusted forks. Review the script before using it. Public binary releases are not available yet; code signing and reproducible packaging remain release requirements.
+## Release trust
+
+The current Windows ZIP is unsigned. SmartScreen may warn, and the SHA-256 checksum detects accidental or malicious file changes only when compared with the trusted release value; it does not establish publisher identity or guarantee safety. Releases are published in the public GitHub repository. Review the source and download only from the official Releases page. Code signing and a reproducible, automated release pipeline are still needed for stronger distribution trust.
+
+## Optional companion script
+
+The repository also contains `companion/TidyCircuit.ps1`. It is separate from the desktop app and is not included in the ZIP. It can report local system information, ask Defender to scan a user-selected file, and move eligible old `.tmp`/`.log` files from the current user's TEMP folder to a local quarantine when explicitly requested and confirmed. That script is not a full-system cleaner; read its source and companion README before running it. Do not run scripts from untrusted forks.
+
+## Vulnerability reports
+
+Avoid posting private file names, paths, or system reports in public issues. Use GitHub's private vulnerability reporting if enabled for this repository. Otherwise, open an issue asking for a private contact channel without including exploit details.

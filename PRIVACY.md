@@ -12,7 +12,7 @@ TidyCircuit 0.1.1 is a Windows desktop app that scans only the folder you choose
 
 The scan list, file paths, file contents used for hashing, and hashes remain in the app process. TidyCircuit does not upload scan data, create an account, or include analytics. The app does not move or delete files. Exported review TSVs are saved only where you choose.
 
-TidyCircuit does not scan the whole PC, clean Windows or app caches, report system health, or detect malware. Use Windows Security for malware scans.
+TidyCircuit does not scan the whole PC, clean Windows or app caches, report system health, or detect malware. The Safety screen can open Windows Security, but it does not perform or report a Defender scan. Use Windows Security to start a malware scan.
 
 ## Report a problem
 

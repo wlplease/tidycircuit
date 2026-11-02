@@ -11,7 +11,7 @@
 - Verify duplicates using SHA-256 after matching file size. Files above 256 MB are skipped.
 - Run on Windows 10 or 11, x64. The ZIP contains a self-contained executable; no .NET install is required.
 
-The app only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. Use Windows Security for threat scans. It skips inaccessible and linked folders. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
+The app only reads the selected folder. It does not move or delete files, clear Windows or app caches, or detect malware. Use Windows Security for threat scans. It skips inaccessible and linked folders. The Safety screen only opens Windows Security; it does not perform a malware scan. This early access executable is unsigned, so Windows SmartScreen may show a warning. Download only from this repository's Releases page.
 
 ## Install
 
