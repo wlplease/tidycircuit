@@ -24,14 +24,17 @@ Open `index.html` in Edge or Chrome, or visit the [live demo](https://wlplease.g
 | Duplicate verification | SHA-256 compares same-size files locally. Files over 256 MB or unreadable files are skipped and labeled. No automatic deletion. |
 | Review list | Mark files, see the total, and export a TSV for manual follow-up. |
 | Organization ideas | Extension groups for the selected folder; no automatic moves. |
-| Windows companion | Export actual drive, RAM, battery charge, and current-user TEMP inventory to a JSON report. |
-| Recoverable cleanup | Explicitly move one eligible old user TEMP file to local quarantine, log it, and restore by operation ID. |
+| Windows companion | Export actual drive, RAM, battery charge, Microsoft Defender status when available, and a tightly scoped user TEMP inventory to a JSON report. |
+| Malware check | Ask Microsoft Defender to scan one chosen user file; Windows Security owns findings and any quarantine. |
+| Recoverable cleanup | Explicitly move one eligible old `.tmp` or `.log` user TEMP file to local quarantine, log it, and restore by operation ID. |
 
 The browser cannot see whole-drive usage, live RAM, battery health, or system caches on its own. Its file picker requires you to select a folder. For Windows data and scoped cleanup, see the [companion guide](companion/README.md). The companion is source code, not a signed public installer.
 
 ## Safety and privacy
 
 - No account, telemetry, file upload, background scan, or automatic deletion.
+- TidyCircuit does not identify viruses. Windows Security or the installed antivirus owns malware detection and actions.
+- Never remove Microsoft, Windows, driver, browser, or application files based on size or duplicate status.
 - A matching hash verifies identical file contents for files that were successfully checked; it does not mean either copy is safe to remove.
 - The companion only inventories current-user TEMP files older than the selected age. Quarantine requires an exact path and confirmation. Restore is available while the quarantined file remains.
 - Windows Storage Sense handles OS temporary files and update cleanup. TidyCircuit links to [Microsoft's Storage Sense guidance](https://learn.microsoft.com/windows/configuration/storage/storage-sense) instead of editing system cache folders directly.
@@ -47,4 +50,3 @@ The browser cannot see whole-drive usage, live RAM, battery health, or system ca
 This is a static front end suitable for a static host. Vercel Hobby has [personal, non-commercial terms](https://vercel.com/docs/plans/hobby); review the terms for your use.
 
 **TidyCircuit remains a working name.** A basic web search found no obvious exact-name software match, but that is not US trademark clearance or proof a domain is available. Follow the [USPTO clearance guidance](https://www.uspto.gov/trademarks/search/comprehensive-clearance-search-similar-trademarks), including similar marks and existing commercial use, before registering the name or committing to a public product launch.
-
