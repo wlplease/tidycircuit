@@ -29,4 +29,4 @@ dotnet publish desktop/TidyCircuit.Desktop/TidyCircuit.Desktop.csproj -c Release
 
 Scans remain on the PC. Duplicate hashes are calculated locally; paths and hashes are not uploaded. A duplicate is only a review clue; it is not permission to delete either copy. See [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the [MIT license](LICENSE).
 
-The app is free during early access. Future paid features may be considered; no payment is required for this release.
+The app is free during early access through **November 11, 2026 at 11:11 UTC**. Existing copies remain usable after the offer ends. The website will pause new free downloads while paid access is prepared. The current GitHub release asset is public and cannot be revoked from people who already have its direct link; checkout and license enforcement are not implemented yet.
